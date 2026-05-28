@@ -11,6 +11,7 @@ from app.core.models import ConversionWarning
 def html_to_markdown(html: str) -> tuple[str, list[ConversionWarning]]:
     warnings: list[ConversionWarning] = []
     lowered = html.lower()
+    cleaned_html = _remove_metadata_blocks(html)
 
     if "<table" in lowered:
         warnings.append(
@@ -40,16 +41,22 @@ def html_to_markdown(html: str) -> tuple[str, list[ConversionWarning]]:
                 ),
             )
         )
-        return _basic_html_to_markdown(html), warnings
+        return _basic_html_to_markdown(cleaned_html), warnings
 
     converted = markdownify(
-        html,
+        cleaned_html,
         heading_style="ATX",
         bullets="-",
         strip=["script", "style"],
         autolinks=False,
     )
     return converted.strip(), warnings
+
+
+def _remove_metadata_blocks(html: str) -> str:
+    text = re.sub(r"(?is)<(script|style|head)[^>]*>.*?</\1>", "", html)
+    text = re.sub(r"(?is)<(meta|link)[^>]*>", "", text)
+    return text
 
 
 def _load_markdownify() -> Callable[..., str] | None:
@@ -64,7 +71,7 @@ def _load_markdownify() -> Callable[..., str] | None:
 
 
 def _basic_html_to_markdown(html: str) -> str:
-    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", html)
+    text = _remove_metadata_blocks(html)
     text = re.sub(
         r"(?is)<a\s+[^>]*href=['\"]([^'\"]+)['\"][^>]*>(.*?)</a>",
         lambda match: _render_link(match.group(2), match.group(1)),
