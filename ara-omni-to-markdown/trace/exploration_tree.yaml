@@ -1,0 +1,51 @@
+tree:
+  - id: N01
+    type: question
+    support_level: explicit
+    source_refs: ["PLAN.md"]
+    title: "How to build a robust local-first document pipeline?"
+    description: "The initial research question addressing privacy and multi-format support."
+    children:
+      - id: N02
+        type: decision
+        support_level: explicit
+        source_refs: ["SPECS_TECHSTACK.md"]
+        title: "Choice of PySide6"
+        description: "Selecting a mature, cross-platform GUI framework for Windows 11."
+      - id: N03
+        type: decision
+        support_level: explicit
+        source_refs: ["GEMINI.md"]
+        title: "Hard Separator Contract"
+        description: "Establishing the byte-for-byte 60-character separator rule."
+      - id: N04
+        type: decision
+        support_level: explicit
+        source_refs: ["WORKFLOWS_ARCHITECTURE.md"]
+        title: "Multi-Engine Fallback Router"
+        description: "Deciding to wrap existing tools rather than writing new parsers."
+        children:
+          - id: N05
+            type: experiment
+            support_level: explicit
+            source_refs: ["tests/unit/test_pandoc_engine.py"]
+            title: "Pandoc Wrapper Validation"
+            description: "Testing initial Pandoc integration for DOCX/ODT."
+          - id: N06
+            type: experiment
+            support_level: explicit
+            source_refs: ["tests/unit/test_mammoth_engine.py"]
+            title: "Mammoth Semantic Fallback"
+            description: "Validating Mammoth as a high-fidelity alternative for DOCX."
+          - id: N07
+            type: experiment
+            support_level: explicit
+            source_refs: ["tests/unit/test_libreoffice_engine.py"]
+            title: "LibreOffice Legacy Support"
+            description: "Implementing .doc to .docx routing via soffice."
+      - id: N08
+        type: decision
+        support_level: explicit
+        source_refs: ["app/core/process.py"]
+        title: "Process-Tree Kill Implementation"
+        description: "Mitigating LibreOffice instability via strict OS-level cleanup."

@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "omni-to-markdown"
+version = "0.1.0"
+description = "Windows-first local desktop app for document-to-markdown conversion and markdown stitching."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [
+  { name = "Omni to Markdown Contributors" }
+]
+dependencies = [
+  "PySide6>=6.8.0",
+  "platformdirs>=4.3.6",
+  "mammoth>=1.8.0",
+  "markdownify>=1.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pyinstaller>=6.11.0",
+  "pytest>=8.3.0",
+  "ruff>=0.6.9",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+  "ara-omni-to-markdown",
+  "docs/benchmark_reports",
+  "scripts/generate_ai_benchmark_report.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

@@ -1,0 +1,15 @@
+# Environment
+- **Python**: 3.12.x or 3.14.x (tested on both)
+- **Framework**: PySide6 (Qt for Python)
+- **Hardware**: Windows 11 Desktop (Primary), Linux (Secondary)
+- **Key dependencies**:
+  - `PySide6`: GUI framework
+  - `platformdirs`: Path management
+  - `mammoth`: DOCX conversion
+  - `markdownify`: HTML to Markdown
+  - `PyMuPDF` (fitz): PDF extraction
+  - `pdfminer.six`: PDF fallback
+  - `psutil`: Process-tree management
+  - `Pandoc`: External system dependency
+  - `LibreOffice`: External system dependency
+- **Random seeds**: N/A

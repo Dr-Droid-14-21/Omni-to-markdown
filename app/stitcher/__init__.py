@@ -1,0 +1,1 @@
+"""Markdown stitching service package."""
