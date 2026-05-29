@@ -5,11 +5,13 @@ from app.conversion.dependency_check import (
     dependency_route_options_for_extension,
     detect_all_dependencies,
     detect_engine_versions,
+    detect_java,
     detect_libreoffice,
     detect_mammoth_package,
     detect_pandoc,
     detect_pdfminer_package,
     detect_pymupdf_package,
+    detect_tika_app,
     required_dependencies_for_extension,
 )
 from app.core.settings import AppSettings
@@ -63,6 +65,7 @@ def test_detect_all_dependencies_uses_which(monkeypatch: object) -> None:
     def fake_which(name: str) -> str | None:
         mapping = {
             "pandoc": r"C:\Tools\pandoc.exe",
+            "java": r"C:\Tools\java.exe",
             "soffice": None,
             "libreoffice": r"C:\Tools\soffice.exe",
         }
@@ -70,6 +73,10 @@ def test_detect_all_dependencies_uses_which(monkeypatch: object) -> None:
 
     monkeypatch.setattr(shutil, "which", fake_which)
     monkeypatch.setattr("importlib.util.find_spec", lambda _: object())
+    monkeypatch.setattr(
+        "app.conversion.dependency_check.resolve_tika_app_path",
+        lambda _: (Path(r"C:\Tools\tika-app.jar"), ""),
+    )
     settings = _settings()
     settings.pandoc_binary_path = ""
     settings.libreoffice_binary_path = ""
@@ -77,6 +84,8 @@ def test_detect_all_dependencies_uses_which(monkeypatch: object) -> None:
     statuses = detect_all_dependencies(settings)
     assert statuses["pandoc"].available is True
     assert statuses["libreoffice"].available is True
+    assert statuses["java"].available is True
+    assert statuses["tika"].available is True
     assert statuses["mammoth"].available is True
     assert statuses["pymupdf"].available is True
     assert statuses["pdfminer"].available is True
@@ -94,6 +103,30 @@ def test_detect_libreoffice_missing_when_not_found(monkeypatch: object) -> None:
     assert "not found in PATH" in status.detail
 
 
+def test_detect_java_missing_when_not_found(monkeypatch: object) -> None:
+    import shutil
+
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    settings = _settings()
+    settings.java_binary_path = ""
+    status = detect_java(settings)
+
+    assert status.available is False
+    assert "not found in PATH" in status.detail
+
+
+def test_detect_tika_app_uses_configured_path(tmp_path: Path) -> None:
+    tika = tmp_path / "tika-app.jar"
+    tika.write_text("", encoding="utf-8")
+    settings = _settings()
+    settings.tika_app_path = str(tika)
+
+    status = detect_tika_app(settings)
+
+    assert status.available is True
+    assert status.path == str(tika)
+
+
 def test_detect_engine_versions_collects_first_line(monkeypatch: object) -> None:
     from types import SimpleNamespace
 
@@ -101,6 +134,8 @@ def test_detect_engine_versions_collects_first_line(monkeypatch: object) -> None
         return {
             "pandoc": DependencyStatus(name="pandoc", available=True, path="pandoc"),
             "libreoffice": DependencyStatus(name="libreoffice", available=False),
+            "java": DependencyStatus(name="java", available=True, path="java"),
+            "tika": DependencyStatus(name="tika", available=True, path="tika-app-3.2.3.jar"),
             "mammoth": DependencyStatus(name="mammoth", available=True, path="mammoth"),
             "pymupdf": DependencyStatus(name="pymupdf", available=True, path="pymupdf"),
             "pdfminer": DependencyStatus(name="pdfminer", available=True, path="pdfminer"),
@@ -116,6 +151,8 @@ def test_detect_engine_versions_collects_first_line(monkeypatch: object) -> None
     versions = detect_engine_versions(_settings())
     assert versions["pandoc"] == "pandoc 3.0.0"
     assert versions["libreoffice"] == "unavailable"
+    assert versions["java"] == "pandoc 3.0.0"
+    assert versions["tika"] == "tika-app-3.2.3.jar"
     assert versions["mammoth"] == "1.0.0"
     assert versions["pymupdf"] == "1.0.0"
     assert versions["pdfminer"] == "1.0.0"

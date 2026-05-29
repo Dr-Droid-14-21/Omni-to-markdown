@@ -7,10 +7,13 @@ from PyInstaller.utils.hooks import collect_submodules
 ROOT = Path(SPECPATH).parents[1]
 APP_ENTRY = ROOT / "app" / "main.py"
 APP_RESOURCES = ROOT / "app" / "resources"
+TIKA_TOOLS = ROOT / "tools" / "tika"
 
 datas = [
     (str(APP_RESOURCES), "app/resources"),
 ]
+if TIKA_TOOLS.exists():
+    datas.append((str(TIKA_TOOLS), "tools/tika"))
 
 hiddenimports = [
     "PySide6.QtMultimedia",

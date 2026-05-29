@@ -10,7 +10,7 @@ Omni to Markdown provides two workflows:
 ## Converter workflow
 
 1. Open the `Converter` tab.
-2. Click `Add Files` or `Add Folder`.
+2. Click `Add Files`, `Add Folder`, or drag files/folders into the queue.
 3. Choose an output folder.
 4. Click `Run Preflight`.
 5. Click `Convert`.
@@ -19,11 +19,24 @@ During conversion:
 
 - `Cancel` requests stop before the next queued file.
 - `Retry Failed` reruns only failed files from the last run.
+- Conversion completion plays a short status sound.
 
 After completion:
 
 - A conversion report is written to `<output>/reports/<run_id>/`.
 - Both `conversion-report.json` and `conversion-report.md` are generated.
+
+## Batch keyword search
+
+Both main tabs include keyword search for the current batch.
+
+Converter search scans queued `.doc`, `.docx`, `.pdf`, `.odt`, and `.odf` files through
+Apache Tika. Stitcher search scans the current Markdown list directly.
+
+Requirements for converter batch search:
+
+- Java available on `PATH`, or configured in `File -> Settings`.
+- `tools/tika/tika-app-3.2.3.jar`, downloaded by `.\scripts\download_tika.ps1`, or a configured Tika jar path.
 
 ## Stitcher workflow
 
@@ -38,6 +51,7 @@ After completion:
 During stitching:
 
 - `Cancel` requests stop the operation safely.
+- Stitch completion plays a short status sound.
 
 Stitcher panel features:
 
@@ -50,7 +64,7 @@ Stitcher panel features:
 Use `File -> Settings` from the main window to configure:
 
 - Default output directory.
-- Pandoc and LibreOffice binary override paths.
+- Pandoc, LibreOffice, Java, and Apache Tika override paths.
 - Conversion behavior defaults.
 
 ## Notes

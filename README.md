@@ -9,9 +9,10 @@ Omni to Markdown is a Windows 11-first, local desktop app that converts supporte
   - `pandoc`, `mammoth`, `libreoffice` for office formats.
   - `pymupdf` primary + `pdfminer` fallback for PDFs.
 - Run report generation (`json` + `markdown`) after each conversion batch.
+- Batch keyword search across queued `.doc`, `.docx`, `.pdf`, `.odt`, `.odf`, and Markdown files.
 - Deterministic Markdown stitcher with exact separator format.
 - Stitch tray save/load support for reusable stitch queues.
-- Neon-styled Windows GUI with action icons, accessibility names, and tooltips.
+- Neon-styled Windows GUI with action icons, drag/drop queues, accessibility names, tooltips, startup splash, and UI sounds.
 - Markdown image path rewrite helpers for conversion cleanup.
 - Threaded GUI execution with cancel/retry for converter and cancel for stitcher.
 - Unit + integration test baseline with skip-aware dependency tests and PDF fixture coverage.
@@ -43,6 +44,14 @@ Install optional runtime engines as needed:
 python -m pip install mammoth markdownify pymupdf pdfminer.six
 ```
 
+Download the Apache-2.0 Tika CLI jar for keyword search inside Office/OpenDocument/PDF files:
+
+```powershell
+.\scripts\download_tika.ps1
+```
+
+Tika search also requires Java on `PATH`, or a Java executable path configured in Settings.
+
 If you prefer python.org installs instead of `uv`, install Python 3.12 side-by-side and use:
 
 ```powershell
@@ -55,6 +64,7 @@ External tools on Windows:
 
 - Pandoc: [https://pandoc.org/installing.html](https://pandoc.org/installing.html)
 - LibreOffice: [https://www.libreoffice.org/download/download-libreoffice/](https://www.libreoffice.org/download/download-libreoffice/)
+- Apache Tika: [https://tika.apache.org/](https://tika.apache.org/)
 
 ## Run tests
 

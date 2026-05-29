@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtWidgets import QTableWidget, QTableWidgetItem
 
 
 class FileQueueTable(QTableWidget):
     HEADERS = ["File", "Type", "Status", "Engine Route", "Warnings"]
+    dropped_paths = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -14,6 +16,9 @@ class FileQueueTable(QTableWidget):
         self.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setStretchLastSection(True)
 
@@ -103,3 +108,28 @@ class FileQueueTable(QTableWidget):
             if value == path_value:
                 return row
         return None
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            return
+        super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        if event.mimeData().hasUrls():
+            paths = [
+                url.toLocalFile()
+                for url in event.mimeData().urls()
+                if url.isLocalFile() and url.toLocalFile()
+            ]
+            if paths:
+                self.dropped_paths.emit(paths)
+                event.acceptProposedAction()
+                return
+        super().dropEvent(event)

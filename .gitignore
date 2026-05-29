@@ -39,6 +39,9 @@ runtime/
 reports/
 output/
 tmp/
+tools/tika/*.jar
+tools/tika/*.sha512
+!tools/tika/.gitkeep
 
 # Local project export artifacts
 doc_to_markdown_md_stitcher_project_foundation.zip

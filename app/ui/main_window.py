@@ -63,3 +63,6 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             self.converter_tab.reload_settings()
             self.statusBar().showMessage("Settings saved", 2500)
+
+    def play_sound(self, name: str) -> None:
+        self._ui_fx.play_sound(name)

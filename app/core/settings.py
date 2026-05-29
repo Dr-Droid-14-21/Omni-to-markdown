@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 from app.core.paths import default_output_dir, get_config_dir
@@ -17,6 +17,8 @@ class AppSettings:
     table_handling: str = "simple"
     pandoc_binary_path: str = ""
     libreoffice_binary_path: str = ""
+    java_binary_path: str = ""
+    tika_app_path: str = ""
     max_file_size_warning_mb: int = 100
     concurrency_limit: int = 1
     privacy_mode: bool = False
@@ -38,7 +40,9 @@ def load_settings(custom_path: Path | None = None) -> AppSettings:
         return AppSettings.default()
 
     raw = json.loads(target.read_text(encoding="utf-8"))
-    return AppSettings(**raw)
+    known_fields = {field.name for field in fields(AppSettings)}
+    filtered = {key: value for key, value in raw.items() if key in known_fields}
+    return AppSettings(**filtered)
 
 
 def save_settings(settings: AppSettings, custom_path: Path | None = None) -> Path:

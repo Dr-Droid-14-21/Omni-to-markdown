@@ -30,6 +30,9 @@ class _ToneBank(QObject):
             tones = {
                 "hover": (sound_dir / "neon-hover.wav", (880.0, 1320.0), 0.035, 0.08),
                 "click": (sound_dir / "neon-click.wav", (220.0, 660.0), 0.07, 0.11),
+                "start": (sound_dir / "neon-start.wav", (440.0, 880.0), 0.09, 0.11),
+                "complete": (sound_dir / "neon-complete.wav", (660.0, 990.0), 0.12, 0.12),
+                "warning": (sound_dir / "neon-warning.wav", (196.0, 392.0), 0.12, 0.12),
             }
             for name, (path, freqs, duration, volume) in tones.items():
                 if not path.exists():
@@ -53,7 +56,7 @@ class _ToneBank(QObject):
             effect.stop()
             effect.play()
             return
-        if name == "click":
+        if name in {"click", "start", "complete", "warning"}:
             QApplication.beep()
 
     def _write_tone(
@@ -119,6 +122,9 @@ class NeonUiEffects(QObject):
         button.setGraphicsEffect(effect)
         button.installEventFilter(self)
         self._effects[button] = effect
+
+    def play_sound(self, name: str) -> None:
+        self._sounds.play(name)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if not isinstance(watched, QPushButton):

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -29,9 +30,11 @@ from app.core.file_detection import (
 )
 from app.core.models import ConversionResult
 from app.core.settings import load_settings
+from app.search import format_search_summary
 from app.ui.widgets.file_queue_table import FileQueueTable
 from app.ui.widgets.warning_panel import WarningPanel
 from app.workers.conversion_worker import ConversionWorker
+from app.workers.search_worker import SearchWorker
 
 
 class ConverterTab(QWidget):
@@ -45,6 +48,9 @@ class ConverterTab(QWidget):
         self._settings = load_settings()
         self._active_thread: QThread | None = None
         self._active_worker: ConversionWorker | None = None
+        self._is_searching = False
+        self._active_search_thread: QThread | None = None
+        self._active_search_worker: SearchWorker | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -97,6 +103,31 @@ class ConverterTab(QWidget):
 
         self.queue_table = FileQueueTable()
         root.addWidget(self.queue_table)
+
+        search_row = QHBoxLayout()
+        search_row.setSpacing(12)
+        search_row.addWidget(QLabel("Keyword search"))
+        self.search_query_edit = QLineEdit()
+        self.search_query_edit.setPlaceholderText("Search current conversion batch")
+        self.search_case_check = QCheckBox("Case sensitive")
+        self.search_button = QPushButton("Search Batch")
+        self.clear_search_button = QPushButton("Clear Results")
+        self.search_button.setProperty("uiRole", "secondary")
+        self.clear_search_button.setProperty("uiRole", "quiet")
+        self.search_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView))
+        self.clear_search_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
+        search_row.addWidget(self.search_query_edit, 1)
+        search_row.addWidget(self.search_case_check)
+        search_row.addWidget(self.search_button)
+        search_row.addWidget(self.clear_search_button)
+        root.addLayout(search_row)
+
+        self.search_status_label = QLabel("Search ready.")
+        self.search_status_label.setObjectName("searchStatusLabel")
+        root.addWidget(self.search_status_label)
+        self.search_results_panel = WarningPanel()
+        self.search_results_panel.setMaximumHeight(150)
+        root.addWidget(self.search_results_panel)
 
         action_row = QHBoxLayout()
         action_row.setSpacing(12)
@@ -153,6 +184,16 @@ class ConverterTab(QWidget):
         self.queue_table.setAccessibleDescription(
             "Queued source files with type, status, selected engine route, and warning count."
         )
+        self.search_query_edit.setAccessibleName("Batch keyword search query")
+        self.search_query_edit.setToolTip("Search for a keyword or phrase in queued files.")
+        self.search_case_check.setAccessibleName("Case sensitive batch search")
+        self.search_case_check.setToolTip("Match uppercase and lowercase exactly.")
+        self.search_button.setAccessibleName("Search current conversion batch")
+        self.search_button.setToolTip("Search queued files using Markdown reading and Apache Tika.")
+        self.clear_search_button.setAccessibleName("Clear batch search results")
+        self.clear_search_button.setToolTip("Clear keyword search results.")
+        self.search_status_label.setAccessibleName("Batch search status")
+        self.search_results_panel.setAccessibleName("Batch search results")
 
         self.preflight_button.setAccessibleName("Run conversion preflight")
         self.preflight_button.setToolTip(
@@ -181,6 +222,10 @@ class ConverterTab(QWidget):
         self.convert_button.clicked.connect(self._on_convert)
         self.cancel_button.clicked.connect(self._on_cancel)
         self.retry_failed_button.clicked.connect(self._on_retry_failed)
+        self.search_button.clicked.connect(self._on_search_batch)
+        self.clear_search_button.clicked.connect(self._on_clear_search_results)
+        self.search_query_edit.returnPressed.connect(self._on_search_batch)
+        self.queue_table.dropped_paths.connect(self._on_paths_dropped)
 
     def _on_add_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
@@ -196,12 +241,12 @@ class ConverterTab(QWidget):
         if not folder:
             return
         root = Path(folder)
-        candidates = [
-            path
-            for path in root.rglob("*")
-            if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS
-        ]
-        self._add_paths(candidates)
+        self._add_paths(self._expand_supported_paths([root]))
+
+    def _on_paths_dropped(self, paths: list[str]) -> None:
+        if self._is_converting:
+            return
+        self._add_paths(self._expand_supported_paths([Path(item) for item in paths]))
 
     def _on_remove_selected(self) -> None:
         selected_rows = sorted(
@@ -223,6 +268,8 @@ class ConverterTab(QWidget):
         self._paths_in_queue.clear()
         self._retry_failed_paths.clear()
         self.warning_panel.clear()
+        self.search_results_panel.clear()
+        self.search_status_label.setText("Search ready.")
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self._mark_preflight_dirty()
@@ -236,6 +283,19 @@ class ConverterTab(QWidget):
     def _on_output_folder_edited(self, _: str) -> None:
         if not self._is_converting:
             self._mark_preflight_dirty()
+
+    def _expand_supported_paths(self, paths: list[Path]) -> list[Path]:
+        candidates: list[Path] = []
+        for path in paths:
+            if path.is_dir():
+                candidates.extend(
+                    item
+                    for item in path.rglob("*")
+                    if item.is_file() and item.suffix.lower() in SUPPORTED_EXTENSIONS
+                )
+                continue
+            candidates.append(path)
+        return candidates
 
     def _add_paths(self, paths: list[Path]) -> None:
         if not paths:
@@ -359,6 +419,7 @@ class ConverterTab(QWidget):
         self._cancel_requested = False
 
         self._set_conversion_running_state(True)
+        self._play_sound("start")
         self._start_worker(queued_paths, output_dir)
 
     def _on_cancel(self) -> None:
@@ -408,7 +469,89 @@ class ConverterTab(QWidget):
         self._cancel_requested = False
 
         self._set_conversion_running_state(True)
+        self._play_sound("start")
         self._start_worker(retry_paths, output_dir)
+
+    def _on_search_batch(self) -> None:
+        if self._is_searching:
+            return
+        query = self.search_query_edit.text().strip()
+        if not query:
+            QMessageBox.warning(self, "Keyword search", "Enter a keyword or phrase first.")
+            return
+        queued_paths = self.queue_table.queued_paths()
+        if not queued_paths:
+            QMessageBox.information(self, "Keyword search", "Queue is empty.")
+            return
+
+        self._settings = load_settings()
+        self.search_results_panel.setPlainText("Searching queued files...")
+        self.search_status_label.setText("Searching...")
+        self._set_search_running_state(True)
+        self._play_sound("start")
+        self._start_search_worker(queued_paths, query, self.search_case_check.isChecked())
+
+    def _on_clear_search_results(self) -> None:
+        if self._is_searching:
+            return
+        self.search_results_panel.clear()
+        self.search_status_label.setText("Search ready.")
+
+    def _start_search_worker(
+        self,
+        queued_paths: list[str],
+        query: str,
+        case_sensitive: bool,
+    ) -> None:
+        worker = SearchWorker(
+            input_files=queued_paths,
+            query=query,
+            settings=self._settings,
+            case_sensitive=case_sensitive,
+        )
+        thread = QThread(self)
+        worker.moveToThread(thread)
+
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._on_search_progress)
+        worker.finished.connect(self._on_search_finished)
+        worker.failed.connect(self._on_search_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_search_thread_finished)
+
+        self._active_search_thread = thread
+        self._active_search_worker = worker
+        thread.start()
+
+    def _on_search_progress(self, index: int, total: int, _: object) -> None:
+        self.search_status_label.setText(f"Searching {index}/{total}...")
+
+    def _on_search_finished(self, summary: object) -> None:
+        self.search_results_panel.setPlainText(format_search_summary(summary))
+        self.search_status_label.setText(
+            f"{summary.total_matches} match(es) in {summary.files_with_matches} file(s)."
+        )
+        self._play_sound("complete" if summary.total_matches else "warning")
+
+    def _on_search_failed(self, message: str) -> None:
+        self.search_results_panel.setPlainText(f"Search failed: {message}")
+        self.search_status_label.setText("Search failed.")
+        self._play_sound("warning")
+
+    def _on_search_thread_finished(self) -> None:
+        self._active_search_worker = None
+        self._active_search_thread = None
+        self._set_search_running_state(False)
+
+    def _set_search_running_state(self, running: bool) -> None:
+        self._is_searching = running
+        self.search_query_edit.setEnabled(not running)
+        self.search_case_check.setEnabled(not running)
+        self.search_button.setEnabled(not running)
+        self.clear_search_button.setEnabled(not running)
 
     def _start_worker(self, queued_paths: list[Path], output_dir: Path) -> None:
         worker = ConversionWorker(
@@ -475,6 +618,7 @@ class ConverterTab(QWidget):
             f"Converted: {converted}, Failed: {failed}, Cancelled: {cancelled}\n"
             f"Reports:\n{json_path}\n{markdown_path}",
         )
+        self._play_sound("complete" if failed == 0 and cancelled == 0 else "warning")
         self._cancel_requested = False
         self._mark_preflight_dirty()
 
@@ -484,6 +628,7 @@ class ConverterTab(QWidget):
         QMessageBox.critical(self, "Conversion worker failed", message)
         self._cancel_requested = False
         self.retry_failed_button.setEnabled(False)
+        self._play_sound("warning")
         self._mark_preflight_dirty()
 
     def _on_worker_thread_finished(self) -> None:
@@ -531,6 +676,12 @@ class ConverterTab(QWidget):
             self.warning_panel.append(message)
         else:
             self.warning_panel.setPlainText(message)
+
+    def _play_sound(self, name: str) -> None:
+        window = self.window()
+        play_sound = getattr(window, "play_sound", None)
+        if callable(play_sound):
+            play_sound(name)
 
     def _status_text_for_result(self, result: ConversionResult) -> str:
         mapping = {

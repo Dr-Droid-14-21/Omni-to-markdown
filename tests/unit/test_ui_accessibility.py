@@ -51,4 +51,6 @@ def test_settings_dialog_fields_have_accessible_names() -> None:
     assert dialog.output_dir_edit.accessibleName() == "Default output directory"
     assert dialog.pandoc_path_edit.accessibleName() == "Pandoc executable path"
     assert dialog.libreoffice_path_edit.accessibleName() == "LibreOffice executable path"
+    assert dialog.java_path_edit.accessibleName() == "Java executable path"
+    assert dialog.tika_path_edit.accessibleName() == "Apache Tika app jar"
     assert dialog.save_button.accessibleName() == "Save settings"

@@ -8,6 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from app.core.settings import AppSettings
+from app.search.tika_locator import resolve_tika_app_path
 
 
 @dataclass(slots=True)
@@ -34,6 +35,21 @@ def detect_libreoffice(settings: AppSettings) -> DependencyStatus:
     )
 
 
+def detect_java(settings: AppSettings) -> DependencyStatus:
+    return _detect_executable(
+        name="java",
+        override=settings.java_binary_path.strip(),
+        candidates=["java"],
+    )
+
+
+def detect_tika_app(settings: AppSettings) -> DependencyStatus:
+    tika_path, detail = resolve_tika_app_path(settings.tika_app_path)
+    if tika_path is None:
+        return DependencyStatus(name="tika", available=False, detail=detail)
+    return DependencyStatus(name="tika", available=True, path=str(tika_path))
+
+
 def detect_mammoth_package(_: AppSettings) -> DependencyStatus:
     return _detect_python_package(name="mammoth", module_name="mammoth")
 
@@ -49,12 +65,16 @@ def detect_pdfminer_package(_: AppSettings) -> DependencyStatus:
 def detect_all_dependencies(settings: AppSettings) -> dict[str, DependencyStatus]:
     pandoc = detect_pandoc(settings)
     libreoffice = detect_libreoffice(settings)
+    java = detect_java(settings)
+    tika = detect_tika_app(settings)
     mammoth = detect_mammoth_package(settings)
     pymupdf = detect_pymupdf_package(settings)
     pdfminer = detect_pdfminer_package(settings)
     return {
         "pandoc": pandoc,
         "libreoffice": libreoffice,
+        "java": java,
+        "tika": tika,
         "mammoth": mammoth,
         "pymupdf": pymupdf,
         "pdfminer": pdfminer,
@@ -70,6 +90,9 @@ def detect_engine_versions(settings: AppSettings) -> dict[str, str]:
             continue
         if name in {"mammoth", "pymupdf", "pdfminer"}:
             versions[name] = _probe_python_package_version(_package_name_for_dependency(name))
+            continue
+        if name == "tika":
+            versions[name] = Path(status.path).name
             continue
         executable = status.path or name
         versions[name] = _probe_version_line(executable)

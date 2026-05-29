@@ -44,6 +44,8 @@ class SettingsDialog(QDialog):
         self.output_dir_edit = QLineEdit()
         self.pandoc_path_edit = QLineEdit()
         self.libreoffice_path_edit = QLineEdit()
+        self.java_path_edit = QLineEdit()
+        self.tika_path_edit = QLineEdit()
         self.markdown_flavor_edit = QLineEdit()
         self.concurrency_spin = QSpinBox()
         self.concurrency_spin.setRange(1, 8)
@@ -60,6 +62,14 @@ class SettingsDialog(QDialog):
         form.addRow(
             "LibreOffice executable path",
             self._with_browse(self.libreoffice_path_edit, self._pick_file_for_libreoffice),
+        )
+        form.addRow(
+            "Java executable path",
+            self._with_browse(self.java_path_edit, self._pick_file_for_java),
+        )
+        form.addRow(
+            "Apache Tika app jar",
+            self._with_browse(self.tika_path_edit, self._pick_file_for_tika),
         )
         form.addRow("Markdown flavor", self.markdown_flavor_edit)
         form.addRow("Concurrency limit", self.concurrency_spin)
@@ -93,6 +103,12 @@ class SettingsDialog(QDialog):
         self.pandoc_path_edit.setToolTip("Optional path override for the Pandoc executable.")
         self.libreoffice_path_edit.setAccessibleName("LibreOffice executable path")
         self.libreoffice_path_edit.setToolTip("Optional path override for soffice or LibreOffice.")
+        self.java_path_edit.setAccessibleName("Java executable path")
+        self.java_path_edit.setToolTip(
+            "Optional path override for the Java executable used by Tika."
+        )
+        self.tika_path_edit.setAccessibleName("Apache Tika app jar")
+        self.tika_path_edit.setToolTip("Optional path override for tika-app-3.2.3.jar.")
         self.markdown_flavor_edit.setAccessibleName("Markdown flavor")
         self.markdown_flavor_edit.setToolTip(
             "Markdown flavor passed to supporting conversion engines."
@@ -123,6 +139,8 @@ class SettingsDialog(QDialog):
         self.output_dir_edit.setText(settings.default_output_directory)
         self.pandoc_path_edit.setText(settings.pandoc_binary_path)
         self.libreoffice_path_edit.setText(settings.libreoffice_binary_path)
+        self.java_path_edit.setText(settings.java_binary_path)
+        self.tika_path_edit.setText(settings.tika_app_path)
         self.markdown_flavor_edit.setText(settings.markdown_flavor)
         self.concurrency_spin.setValue(settings.concurrency_limit)
         self.privacy_mode_check.setChecked(settings.privacy_mode)
@@ -141,6 +159,21 @@ class SettingsDialog(QDialog):
         picked, _ = QFileDialog.getOpenFileName(self, "Select LibreOffice executable")
         if picked:
             self.libreoffice_path_edit.setText(picked)
+
+    def _pick_file_for_java(self) -> None:
+        picked, _ = QFileDialog.getOpenFileName(self, "Select Java executable")
+        if picked:
+            self.java_path_edit.setText(picked)
+
+    def _pick_file_for_tika(self) -> None:
+        picked, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Apache Tika app jar",
+            "",
+            "Java Archives (*.jar);;All files (*.*)",
+        )
+        if picked:
+            self.tika_path_edit.setText(picked)
 
     def _on_save(self) -> None:
         output_dir = self.output_dir_edit.text().strip()
@@ -163,6 +196,8 @@ class SettingsDialog(QDialog):
             table_handling=self._settings.table_handling,
             pandoc_binary_path=self.pandoc_path_edit.text().strip(),
             libreoffice_binary_path=self.libreoffice_path_edit.text().strip(),
+            java_binary_path=self.java_path_edit.text().strip(),
+            tika_app_path=self.tika_path_edit.text().strip(),
             max_file_size_warning_mb=self._settings.max_file_size_warning_mb,
             concurrency_limit=self.concurrency_spin.value(),
             privacy_mode=self.privacy_mode_check.isChecked(),

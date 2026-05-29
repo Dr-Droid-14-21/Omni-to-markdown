@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
@@ -17,11 +18,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.models import StitchManifest, StitchResult
+from app.core.settings import load_settings
+from app.search import format_search_summary
 from app.stitcher.separator import build_separator
 from app.stitcher.stitcher_service import StitcherValidationError
 from app.stitcher.tray_manifest import StitchTrayError, load_stitch_tray, save_stitch_tray
 from app.ui.widgets.drag_drop_list import DragDropList
 from app.ui.widgets.warning_panel import WarningPanel
+from app.workers.search_worker import SearchWorker
 from app.workers.stitch_worker import StitchWorker
 
 TRAY_FILE_FILTER = "Omni Stitch Tray (*.omni-tray.json);;JSON Files (*.json)"
@@ -35,6 +39,9 @@ class StitcherTab(QWidget):
         self._cancel_requested = False
         self._active_thread: QThread | None = None
         self._active_worker: StitchWorker | None = None
+        self._is_searching = False
+        self._active_search_thread: QThread | None = None
+        self._active_search_worker: SearchWorker | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -92,6 +99,31 @@ class StitcherTab(QWidget):
         self.file_list = DragDropList()
         self.file_list.setSelectionMode(DragDropList.SelectionMode.ExtendedSelection)
         root.addWidget(self.file_list)
+
+        search_row = QHBoxLayout()
+        search_row.setSpacing(12)
+        search_row.addWidget(QLabel("Keyword search"))
+        self.search_query_edit = QLineEdit()
+        self.search_query_edit.setPlaceholderText("Search current stitch batch")
+        self.search_case_check = QCheckBox("Case sensitive")
+        self.search_button = QPushButton("Search Batch")
+        self.clear_search_button = QPushButton("Clear Results")
+        self.search_button.setProperty("uiRole", "secondary")
+        self.clear_search_button.setProperty("uiRole", "quiet")
+        self.search_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogContentsView))
+        self.clear_search_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DialogResetButton))
+        search_row.addWidget(self.search_query_edit, 1)
+        search_row.addWidget(self.search_case_check)
+        search_row.addWidget(self.search_button)
+        search_row.addWidget(self.clear_search_button)
+        root.addLayout(search_row)
+
+        self.search_status_label = QLabel("Search ready.")
+        self.search_status_label.setObjectName("searchStatusLabel")
+        root.addWidget(self.search_status_label)
+        self.search_results_panel = WarningPanel()
+        self.search_results_panel.setMaximumHeight(150)
+        root.addWidget(self.search_results_panel)
 
         output_grid = QGridLayout()
         output_grid.setHorizontalSpacing(12)
@@ -162,6 +194,16 @@ class StitcherTab(QWidget):
         self.file_list.setAccessibleDescription(
             "Ordered Markdown files that will be stitched together."
         )
+        self.search_query_edit.setAccessibleName("Stitch batch keyword search query")
+        self.search_query_edit.setToolTip("Search for a keyword or phrase in current stitch files.")
+        self.search_case_check.setAccessibleName("Case sensitive stitch search")
+        self.search_case_check.setToolTip("Match uppercase and lowercase exactly.")
+        self.search_button.setAccessibleName("Search current stitch batch")
+        self.search_button.setToolTip("Search Markdown files currently in the stitch list.")
+        self.clear_search_button.setAccessibleName("Clear stitch search results")
+        self.clear_search_button.setToolTip("Clear keyword search results.")
+        self.search_status_label.setAccessibleName("Stitch search status")
+        self.search_results_panel.setAccessibleName("Stitch search results")
         self.output_path_edit.setAccessibleName("Stitched Markdown output file")
         self.output_path_edit.setToolTip("Destination .md file for the stitched output.")
         self.browse_output_button.setAccessibleName("Browse for stitched Markdown output file")
@@ -190,6 +232,9 @@ class StitcherTab(QWidget):
         self.browse_output_button.clicked.connect(self._on_pick_output)
         self.stitch_button.clicked.connect(self._on_stitch)
         self.cancel_button.clicked.connect(self._on_cancel)
+        self.search_button.clicked.connect(self._on_search_batch)
+        self.clear_search_button.clicked.connect(self._on_clear_search_results)
+        self.search_query_edit.returnPressed.connect(self._on_search_batch)
         self.file_list.dropped_paths.connect(self._on_paths_dropped)
         self.file_list.currentRowChanged.connect(self._refresh_separator_preview)
         model = self.file_list.model()
@@ -333,6 +378,8 @@ class StitcherTab(QWidget):
         self.separator_preview_edit.clear()
         self.duplicate_warning_label.clear()
         self.warning_panel.clear()
+        self.search_results_panel.clear()
+        self.search_status_label.setText("Search ready.")
 
     def _on_move_up(self) -> None:
         if self._is_stitching:
@@ -394,6 +441,7 @@ class StitcherTab(QWidget):
         self._cancel_requested = False
         self._set_stitch_running_state(True)
         self.status_label.setText("Stitching...")
+        self._play_sound("start")
         self._start_worker(input_paths, Path(output_text))
 
     def _on_cancel(self) -> None:
@@ -404,6 +452,90 @@ class StitcherTab(QWidget):
         self.status_label.setText("Cancelling...")
         if self._active_worker is not None:
             self._active_worker.cancel()
+
+    def _on_search_batch(self) -> None:
+        if self._is_searching:
+            return
+        query = self.search_query_edit.text().strip()
+        if not query:
+            QMessageBox.warning(self, "Keyword search", "Enter a keyword or phrase first.")
+            return
+        input_paths = self._collect_input_paths()
+        if not input_paths:
+            QMessageBox.information(self, "Keyword search", "Stitch list is empty.")
+            return
+
+        self.search_results_panel.setPlainText("Searching stitch files...")
+        self.search_status_label.setText("Searching...")
+        self._set_search_running_state(True)
+        self._play_sound("start")
+        self._start_search_worker(
+            [str(path) for path in input_paths],
+            query,
+            self.search_case_check.isChecked(),
+        )
+
+    def _on_clear_search_results(self) -> None:
+        if self._is_searching:
+            return
+        self.search_results_panel.clear()
+        self.search_status_label.setText("Search ready.")
+
+    def _start_search_worker(
+        self,
+        input_paths: list[str],
+        query: str,
+        case_sensitive: bool,
+    ) -> None:
+        worker = SearchWorker(
+            input_files=input_paths,
+            query=query,
+            settings=load_settings(),
+            case_sensitive=case_sensitive,
+        )
+        thread = QThread(self)
+        worker.moveToThread(thread)
+
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._on_search_progress)
+        worker.finished.connect(self._on_search_finished)
+        worker.failed.connect(self._on_search_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._on_search_thread_finished)
+
+        self._active_search_worker = worker
+        self._active_search_thread = thread
+        thread.start()
+
+    def _on_search_progress(self, index: int, total: int, _: object) -> None:
+        self.search_status_label.setText(f"Searching {index}/{total}...")
+
+    def _on_search_finished(self, summary: object) -> None:
+        self.search_results_panel.setPlainText(format_search_summary(summary))
+        self.search_status_label.setText(
+            f"{summary.total_matches} match(es) in {summary.files_with_matches} file(s)."
+        )
+        self._play_sound("complete" if summary.total_matches else "warning")
+
+    def _on_search_failed(self, message: str) -> None:
+        self.search_results_panel.setPlainText(f"Search failed: {message}")
+        self.search_status_label.setText("Search failed.")
+        self._play_sound("warning")
+
+    def _on_search_thread_finished(self) -> None:
+        self._active_search_worker = None
+        self._active_search_thread = None
+        self._set_search_running_state(False)
+
+    def _set_search_running_state(self, running: bool) -> None:
+        self._is_searching = running
+        self.search_query_edit.setEnabled(not running)
+        self.search_case_check.setEnabled(not running)
+        self.search_button.setEnabled(not running)
+        self.clear_search_button.setEnabled(not running)
 
     def _start_worker(self, input_paths: list[Path], output_path: Path) -> None:
         worker = StitchWorker(
@@ -440,18 +572,21 @@ class StitcherTab(QWidget):
             f"Created {result.output_path}{warning_note}.",
         )
         self.status_label.setText(f"Stitched {result.file_count} file(s).")
+        self._play_sound("complete" if not result.warnings else "warning")
         self._cancel_requested = False
 
     def _on_worker_failed(self, message: str) -> None:
         QMessageBox.critical(self, "Stitch failed", message)
         self._append_warning(message)
         self.status_label.setText("Stitch failed.")
+        self._play_sound("warning")
         self._cancel_requested = False
 
     def _on_worker_cancelled(self, message: str) -> None:
         QMessageBox.information(self, "Stitch cancelled", message)
         self._append_warning(message)
         self.status_label.setText("Stitch cancelled.")
+        self._play_sound("warning")
         self._cancel_requested = False
 
     def _on_worker_thread_finished(self) -> None:
@@ -525,3 +660,9 @@ class StitcherTab(QWidget):
             self.warning_panel.append(message)
         else:
             self.warning_panel.setPlainText(message)
+
+    def _play_sound(self, name: str) -> None:
+        window = self.window()
+        play_sound = getattr(window, "play_sound", None)
+        if callable(play_sound):
+            play_sound(name)
