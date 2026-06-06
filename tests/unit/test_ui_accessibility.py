@@ -42,6 +42,9 @@ def test_converter_and_stitcher_buttons_have_accessible_names_and_tooltips() -> 
     for button in buttons:
         assert button.accessibleName()
         assert button.toolTip()
+        assert button.minimumHeight() >= 46
+        assert button.iconSize().width() >= 22
+        assert button.iconSize().height() >= 22
 
 
 def test_settings_dialog_fields_have_accessible_names() -> None:

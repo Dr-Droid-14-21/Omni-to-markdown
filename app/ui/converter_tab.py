@@ -31,6 +31,7 @@ from app.core.file_detection import (
 from app.core.models import ConversionResult
 from app.core.settings import load_settings
 from app.search import format_search_summary
+from app.ui.button_metrics import apply_button_metrics_to
 from app.ui.widgets.file_queue_table import FileQueueTable
 from app.ui.widgets.warning_panel import WarningPanel
 from app.workers.conversion_worker import ConversionWorker
@@ -161,6 +162,7 @@ class ConverterTab(QWidget):
         self.warning_panel = WarningPanel()
         root.addWidget(self.warning_panel)
 
+        apply_button_metrics_to(self)
         self._apply_accessibility()
         self._connect_signals()
 

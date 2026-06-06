@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.settings import AppSettings, load_settings, save_settings
+from app.ui.button_metrics import apply_button_metrics_to
 from app.ui.neon_effects import NeonUiEffects
 
 
@@ -92,6 +93,7 @@ class SettingsDialog(QDialog):
 
         self.cancel_button.clicked.connect(self.reject)
         self.save_button.clicked.connect(self._on_save)
+        apply_button_metrics_to(self)
         self._apply_accessibility()
         self._ui_fx = NeonUiEffects(self)
         self._ui_fx.install()

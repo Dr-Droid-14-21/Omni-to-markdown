@@ -23,6 +23,7 @@ from app.search import format_search_summary
 from app.stitcher.separator import build_separator
 from app.stitcher.stitcher_service import StitcherValidationError
 from app.stitcher.tray_manifest import StitchTrayError, load_stitch_tray, save_stitch_tray
+from app.ui.button_metrics import apply_button_metrics_to
 from app.ui.widgets.drag_drop_list import DragDropList
 from app.ui.widgets.warning_panel import WarningPanel
 from app.workers.search_worker import SearchWorker
@@ -60,8 +61,9 @@ class StitcherTab(QWidget):
         subtitle.setObjectName("tabSubtitle")
         root.addWidget(subtitle)
 
-        controls = QHBoxLayout()
-        controls.setSpacing(10)
+        controls = QGridLayout()
+        controls.setHorizontalSpacing(10)
+        controls.setVerticalSpacing(10)
         self.add_files_button = QPushButton("Add Files")
         self.load_tray_button = QPushButton("Load Tray")
         self.save_tray_button = QPushButton("Save Tray")
@@ -87,13 +89,14 @@ class StitcherTab(QWidget):
         self.move_up_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
         self.move_down_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowDown))
 
-        controls.addWidget(self.add_files_button)
-        controls.addWidget(self.load_tray_button)
-        controls.addWidget(self.save_tray_button)
-        controls.addWidget(self.remove_selected_button)
-        controls.addWidget(self.clear_button)
-        controls.addWidget(self.move_up_button)
-        controls.addWidget(self.move_down_button)
+        controls.addWidget(self.add_files_button, 0, 0)
+        controls.addWidget(self.load_tray_button, 0, 1)
+        controls.addWidget(self.save_tray_button, 0, 2)
+        controls.addWidget(self.remove_selected_button, 0, 3)
+        controls.addWidget(self.move_up_button, 1, 0)
+        controls.addWidget(self.move_down_button, 1, 1)
+        controls.addWidget(self.clear_button, 1, 2)
+        controls.setColumnStretch(4, 1)
         root.addLayout(controls)
 
         self.file_list = DragDropList()
@@ -171,6 +174,7 @@ class StitcherTab(QWidget):
         self.warning_panel = WarningPanel()
         root.addWidget(self.warning_panel)
 
+        apply_button_metrics_to(self)
         self._apply_accessibility()
         self._connect_signals()
 
