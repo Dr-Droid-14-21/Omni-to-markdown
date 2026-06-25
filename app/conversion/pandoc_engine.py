@@ -19,7 +19,7 @@ from app.core.settings import AppSettings, load_settings
 
 class PandocEngine(ConversionEngine):
     name = "pandoc"
-    supported_extensions = {".docx", ".odt", ".html"}
+    supported_extensions = {".docx", ".htm", ".html", ".odt"}
 
     def __init__(self, settings: AppSettings | None = None, timeout_seconds: int = 120) -> None:
         self.settings = settings or load_settings()
@@ -158,6 +158,7 @@ class PandocEngine(ConversionEngine):
 def _source_format_for_extension(extension: str) -> str:
     mapping = {
         ".docx": "docx",
+        ".htm": "html",
         ".odt": "odt",
         ".html": "html",
     }

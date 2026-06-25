@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import QThread, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -12,6 +13,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QStyle,
     QVBoxLayout,
     QWidget,
@@ -24,6 +26,7 @@ from app.stitcher.separator import build_separator
 from app.stitcher.stitcher_service import StitcherValidationError
 from app.stitcher.tray_manifest import StitchTrayError, load_stitch_tray, save_stitch_tray
 from app.ui.button_metrics import apply_button_metrics_to
+from app.ui.widgets.cut_corner_panel import CutCornerPanel
 from app.ui.widgets.drag_drop_list import DragDropList
 from app.ui.widgets.warning_panel import WarningPanel
 from app.workers.search_worker import SearchWorker
@@ -48,9 +51,8 @@ class StitcherTab(QWidget):
     def _setup_ui(self) -> None:
         self.setObjectName("stitcherTab")
         root = QVBoxLayout(self)
-        root.setAlignment(Qt.AlignmentFlag.AlignTop)
-        root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(16)
+        root.setContentsMargins(20, 14, 20, 10)
+        root.setSpacing(7)
 
         title = QLabel("OMNI STITCHER // MARKDOWN ASSEMBLY BAY")
         title.setObjectName("tabTitle")
@@ -60,10 +62,10 @@ class StitcherTab(QWidget):
         )
         subtitle.setObjectName("tabSubtitle")
         root.addWidget(subtitle)
+        root.addWidget(self._build_overview_panel())
 
-        controls = QGridLayout()
-        controls.setHorizontalSpacing(10)
-        controls.setVerticalSpacing(10)
+        controls = QHBoxLayout()
+        controls.setSpacing(8)
         self.add_files_button = QPushButton("Add Files")
         self.load_tray_button = QPushButton("Load Tray")
         self.save_tray_button = QPushButton("Save Tray")
@@ -89,19 +91,23 @@ class StitcherTab(QWidget):
         self.move_up_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowUp))
         self.move_down_button.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_ArrowDown))
 
-        controls.addWidget(self.add_files_button, 0, 0)
-        controls.addWidget(self.load_tray_button, 0, 1)
-        controls.addWidget(self.save_tray_button, 0, 2)
-        controls.addWidget(self.remove_selected_button, 0, 3)
-        controls.addWidget(self.move_up_button, 1, 0)
-        controls.addWidget(self.move_down_button, 1, 1)
-        controls.addWidget(self.clear_button, 1, 2)
-        controls.setColumnStretch(4, 1)
+        controls.addWidget(self.add_files_button)
+        controls.addWidget(self.load_tray_button)
+        controls.addWidget(self.save_tray_button)
+        controls.addWidget(self.remove_selected_button)
+        controls.addWidget(self.move_up_button)
+        controls.addWidget(self.move_down_button)
+        controls.addWidget(self.clear_button)
+        controls.addStretch()
         root.addLayout(controls)
 
         self.file_list = DragDropList()
         self.file_list.setSelectionMode(DragDropList.SelectionMode.ExtendedSelection)
-        root.addWidget(self.file_list)
+        self.file_list.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        root.addWidget(self.file_list, 3)
 
         search_row = QHBoxLayout()
         search_row.setSpacing(12)
@@ -125,12 +131,17 @@ class StitcherTab(QWidget):
         self.search_status_label.setObjectName("searchStatusLabel")
         root.addWidget(self.search_status_label)
         self.search_results_panel = WarningPanel()
-        self.search_results_panel.setMaximumHeight(150)
+        self.search_results_panel.setMinimumHeight(34)
+        self.search_results_panel.setMaximumHeight(56)
+        self.search_results_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         root.addWidget(self.search_results_panel)
 
         output_grid = QGridLayout()
-        output_grid.setHorizontalSpacing(12)
-        output_grid.setVerticalSpacing(10)
+        output_grid.setHorizontalSpacing(10)
+        output_grid.setVerticalSpacing(7)
         output_grid.addWidget(QLabel("Output file"), 0, 0)
         self.output_path_edit = QLineEdit()
         output_grid.addWidget(self.output_path_edit, 0, 1)
@@ -140,15 +151,11 @@ class StitcherTab(QWidget):
             style.standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton)
         )
         output_grid.addWidget(self.browse_output_button, 0, 2)
-        root.addLayout(output_grid)
-
-        preview_row = QHBoxLayout()
-        preview_row.setSpacing(12)
-        preview_row.addWidget(QLabel("Separator preview"))
+        output_grid.addWidget(QLabel("Separator preview"), 1, 0)
         self.separator_preview_edit = QLineEdit()
         self.separator_preview_edit.setReadOnly(True)
-        preview_row.addWidget(self.separator_preview_edit)
-        root.addLayout(preview_row)
+        output_grid.addWidget(self.separator_preview_edit, 1, 1, 1, 2)
+        root.addLayout(output_grid)
 
         run_row = QHBoxLayout()
         run_row.setSpacing(12)
@@ -168,15 +175,93 @@ class StitcherTab(QWidget):
         root.addWidget(QLabel("Duplicate basenames"))
         self.duplicate_warning_label = QLabel("")
         self.duplicate_warning_label.setWordWrap(True)
+        self.duplicate_warning_label.setMaximumHeight(24)
         root.addWidget(self.duplicate_warning_label)
 
         root.addWidget(QLabel("Warnings"))
         self.warning_panel = WarningPanel()
+        self.warning_panel.setMinimumHeight(36)
+        self.warning_panel.setMaximumHeight(56)
+        self.warning_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         root.addWidget(self.warning_panel)
 
         apply_button_metrics_to(self)
         self._apply_accessibility()
         self._connect_signals()
+        self._refresh_overview()
+
+    def _build_overview_panel(self) -> QWidget:
+        card = CutCornerPanel(self)
+        card.setObjectName("heroPanel")
+        card.setMaximumHeight(144)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(5)
+
+        title = QLabel("Assemble long-form Markdown with tray saves and live ordering.")
+        title.setObjectName("heroTitle")
+        layout.addWidget(title)
+
+        copy = QLabel(
+            "Drag Markdown files into place, save reusable trays, watch duplicate basename "
+            "warnings, and send the finished output straight into its destination folder."
+        )
+        copy.setObjectName("heroCopy")
+        copy.setWordWrap(True)
+        copy.setMaximumHeight(32)
+        layout.addWidget(copy)
+
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(18)
+        metrics.setVerticalSpacing(8)
+        self.stitch_count_value = QLabel("0")
+        self.stitch_count_value.setObjectName("metricValue")
+        self.stitch_mode_value = QLabel("Tray Ready")
+        self.stitch_mode_value.setObjectName("metricValue")
+        self.duplicate_count_value = QLabel("0")
+        self.duplicate_count_value.setObjectName("metricValue")
+        self.stitch_count_caption = QLabel("Files in stitch list")
+        self.stitch_count_caption.setObjectName("metricCaption")
+        self.stitch_mode_caption = QLabel("Reusable tray workflow")
+        self.stitch_mode_caption.setObjectName("metricCaption")
+        self.duplicate_count_caption = QLabel("Duplicate basenames")
+        self.duplicate_count_caption.setObjectName("metricCaption")
+        metrics.addWidget(self.stitch_count_value, 0, 0)
+        metrics.addWidget(self.stitch_mode_value, 0, 1)
+        metrics.addWidget(self.duplicate_count_value, 0, 2)
+        metrics.addWidget(self.stitch_count_caption, 1, 0)
+        metrics.addWidget(self.stitch_mode_caption, 1, 1)
+        metrics.addWidget(self.duplicate_count_caption, 1, 2)
+        layout.addLayout(metrics)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        style = self.style()
+        self.open_output_folder_button = QPushButton("Open Output Folder")
+        self.open_output_folder_button.setProperty("uiRole", "secondary")
+        self.open_output_folder_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
+        )
+        self.preview_output_button = QPushButton("Use Suggested Output")
+        self.preview_output_button.setProperty("uiRole", "quiet")
+        self.preview_output_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)
+        )
+        actions.addWidget(self.open_output_folder_button)
+        actions.addWidget(self.preview_output_button)
+        actions.addStretch()
+        layout.addLayout(actions)
+
+        self.overview_detail_label = QLabel("")
+        self.overview_detail_label.setObjectName("heroCopy")
+        self.overview_detail_label.setWordWrap(False)
+        self.overview_detail_label.setMaximumHeight(18)
+        layout.addWidget(self.overview_detail_label)
+
+        return card
 
     def _apply_accessibility(self) -> None:
         self.add_files_button.setAccessibleName("Add Markdown files")
@@ -224,6 +309,14 @@ class StitcherTab(QWidget):
         self.status_label.setAccessibleName("Stitcher status")
         self.duplicate_warning_label.setAccessibleName("Duplicate basename warnings")
         self.warning_panel.setAccessibleName("Stitcher warnings and errors")
+        self.open_output_folder_button.setAccessibleName("Open stitch output folder")
+        self.open_output_folder_button.setToolTip(
+            "Open the folder that will receive the stitched Markdown output."
+        )
+        self.preview_output_button.setAccessibleName("Use suggested stitched output path")
+        self.preview_output_button.setToolTip(
+            "Fill the output path using the first file name in the stitch list."
+        )
 
     def _connect_signals(self) -> None:
         self.add_files_button.clicked.connect(self._on_add_files)
@@ -240,6 +333,9 @@ class StitcherTab(QWidget):
         self.clear_search_button.clicked.connect(self._on_clear_search_results)
         self.search_query_edit.returnPressed.connect(self._on_search_batch)
         self.file_list.dropped_paths.connect(self._on_paths_dropped)
+        self.open_output_folder_button.clicked.connect(self._on_open_output_folder)
+        self.preview_output_button.clicked.connect(self._on_use_suggested_output)
+        self.output_path_edit.textEdited.connect(lambda _: self._refresh_overview())
         self.file_list.currentRowChanged.connect(self._refresh_separator_preview)
         model = self.file_list.model()
         model.rowsMoved.connect(self._on_list_structure_changed)
@@ -269,6 +365,7 @@ class StitcherTab(QWidget):
             self.file_list.takeItem(self.file_list.row(item))
         self._refresh_separator_preview()
         self._refresh_duplicate_warnings()
+        self._refresh_overview()
 
     def _on_load_tray(self) -> None:
         if self._is_stitching:
@@ -328,6 +425,7 @@ class StitcherTab(QWidget):
         self._add_paths(valid_paths)
         if tray.output_path is not None:
             self.output_path_edit.setText(str(tray.output_path))
+            self._refresh_overview()
 
         for skipped in skipped_paths:
             self._append_warning(f"Skipped tray item: {skipped}")
@@ -384,6 +482,7 @@ class StitcherTab(QWidget):
         self.warning_panel.clear()
         self.search_results_panel.clear()
         self.search_status_label.setText("Search ready.")
+        self._refresh_overview()
 
     def _on_move_up(self) -> None:
         if self._is_stitching:
@@ -420,6 +519,32 @@ class StitcherTab(QWidget):
             if not target.lower().endswith(".md"):
                 target = f"{target}.md"
             self.output_path_edit.setText(target)
+            self._refresh_overview()
+
+    def _on_open_output_folder(self) -> None:
+        output_text = self.output_path_edit.text().strip()
+        output_path = Path(output_text) if output_text else None
+        target_folder = (
+            output_path.parent
+            if output_path is not None
+            else Path(load_settings().default_output_directory)
+        )
+        target_folder.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(target_folder)))
+
+    def _on_use_suggested_output(self) -> None:
+        input_paths = self._collect_input_paths()
+        if not input_paths:
+            QMessageBox.information(
+                self,
+                "Suggested output",
+                "Add at least one Markdown file before creating a suggested output path.",
+            )
+            return
+        default_dir = Path(load_settings().default_output_directory)
+        suggested_name = f"{input_paths[0].stem}-stitched.md"
+        self.output_path_edit.setText(str(default_dir / suggested_name))
+        self._refresh_overview()
 
     def _on_stitch(self) -> None:
         if self._is_stitching:
@@ -612,6 +737,8 @@ class StitcherTab(QWidget):
         self.output_path_edit.setEnabled(not running)
         self.stitch_button.setEnabled(not running)
         self.cancel_button.setEnabled(running)
+        self.open_output_folder_button.setEnabled(not running)
+        self.preview_output_button.setEnabled(not running)
 
     def _collect_input_paths(self) -> list[Path]:
         return [Path(self.file_list.item(i).text()) for i in range(self.file_list.count())]
@@ -627,10 +754,12 @@ class StitcherTab(QWidget):
             self.file_list.setCurrentRow(0)
         self._refresh_separator_preview()
         self._refresh_duplicate_warnings()
+        self._refresh_overview()
 
     def _on_list_structure_changed(self, *_: object) -> None:
         self._refresh_separator_preview()
         self._refresh_duplicate_warnings()
+        self._refresh_overview()
 
     def _refresh_separator_preview(self) -> None:
         row = self.file_list.currentRow()
@@ -657,6 +786,25 @@ class StitcherTab(QWidget):
             f"[DUPLICATE_BASENAME] duplicate basename in stitch list: {name}" for name in duplicates
         ]
         self.duplicate_warning_label.setText("\n".join(lines))
+
+    def _refresh_overview(self) -> None:
+        file_count = self.file_list.count()
+        self.stitch_count_value.setText(str(file_count))
+        duplicates = [
+            Path(self.file_list.item(i).text()).name.lower()
+            for i in range(self.file_list.count())
+        ]
+        duplicate_count = len({name for name in duplicates if duplicates.count(name) > 1})
+        self.duplicate_count_value.setText(str(duplicate_count))
+        self.stitch_mode_value.setText("Tray Ready" if file_count else "Awaiting Files")
+
+        output_text = self.output_path_edit.text().strip()
+        if output_text:
+            self.overview_detail_label.setText(f"Current output target: {output_text}")
+        else:
+            self.overview_detail_label.setText(
+                "No output file selected yet. Use Suggested Output or choose a destination."
+            )
 
     def _append_warning(self, message: str) -> None:
         current = self.warning_panel.toPlainText()

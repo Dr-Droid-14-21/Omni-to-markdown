@@ -35,6 +35,34 @@ def test_conversion_service_uses_pandoc_for_docx(tmp_path: Path) -> None:
     assert (output_dir / "input.md").exists()
 
 
+def test_conversion_service_uses_local_html_engine(tmp_path: Path) -> None:
+    source = tmp_path / "page.html"
+    source.write_text("<h1>Hello</h1><p>Converted locally.</p>", encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    service = ConversionService(settings=_settings())
+    results = service.convert_files([source], output_dir)
+
+    assert len(results) == 1
+    assert results[0].status == FileStatus.CONVERTED
+    assert results[0].engine_name == "html"
+    assert (output_dir / "page.md").read_text(encoding="utf-8").startswith("# Hello")
+
+
+def test_conversion_service_uses_local_text_engine(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    source.write_text("Line 1  \r\n\r\n\r\nLine 2\t \r\n", encoding="utf-8")
+    output_dir = tmp_path / "out"
+
+    service = ConversionService(settings=_settings())
+    results = service.convert_files([source], output_dir)
+
+    assert len(results) == 1
+    assert results[0].status == FileStatus.CONVERTED
+    assert results[0].engine_name == "text"
+    assert (output_dir / "notes.md").read_text(encoding="utf-8") == "Line 1\n\nLine 2\n"
+
+
 def test_conversion_service_marks_unavailable_engines_as_failed(tmp_path: Path) -> None:
     source = tmp_path / "scan.pdf"
     source.write_bytes(b"%PDF-1.7")

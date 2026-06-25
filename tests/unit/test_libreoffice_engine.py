@@ -103,3 +103,38 @@ def test_convert_success_writes_normalized_output(tmp_path: Path, monkeypatch: o
     assert result.status == FileStatus.CONVERTED_WITH_WARNINGS
     assert output.read_text(encoding="utf-8") == "Line\n"
     assert any(item.code == "DOC_INTERMEDIATE_DOCX" for item in result.warnings)
+
+
+def test_convert_rtf_uses_direct_html_export(tmp_path: Path, monkeypatch: object) -> None:
+    source = tmp_path / "notes.rtf"
+    source.write_text(r"{\rtf1\ansi Notes}", encoding="utf-8")
+    output = tmp_path / "notes.md"
+    seen_targets: list[str] = []
+
+    def fake_detect(_: AppSettings) -> DependencyStatus:
+        return DependencyStatus(name="libreoffice", available=True, path="soffice")
+
+    def fake_run_process(command: list[str], timeout_seconds: int) -> ProcessRunResult:
+        assert timeout_seconds == 180
+        out_dir = Path(command[command.index("--outdir") + 1])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        target = command[command.index("--convert-to") + 1]
+        seen_targets.append(target)
+        if target == "html":
+            (out_dir / f"{source.stem}.html").write_text("<p>Notes</p>", encoding="utf-8")
+        return ProcessRunResult(returncode=0, stdout="", stderr="", timed_out=False)
+
+    monkeypatch.setattr("app.conversion.libreoffice_engine.detect_libreoffice", fake_detect)
+    monkeypatch.setattr("app.conversion.libreoffice_engine.run_process", fake_run_process)
+    monkeypatch.setattr(
+        "app.conversion.libreoffice_engine.html_to_markdown",
+        lambda _html: ("Notes\r\n", []),
+    )
+
+    engine = LibreOfficeEngine(settings=_settings())
+    result = engine.convert(source, output, _plan(source, output))
+
+    assert seen_targets == ["html"]
+    assert result.status == FileStatus.CONVERTED
+    assert output.read_text(encoding="utf-8") == "Notes\n"
+    assert result.metadata["route"] == "libreoffice->html->markdown"

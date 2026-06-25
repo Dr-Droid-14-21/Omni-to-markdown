@@ -112,9 +112,15 @@ def dependency_route_options_for_extension(extension: str) -> list[set[str]]:
         return [{"libreoffice"}]
     if ext == ".docx":
         return [{"pandoc"}, {"mammoth"}, {"libreoffice"}]
+    if ext in {".htm", ".html"}:
+        return [set(), {"pandoc"}]
+    if ext == ".txt":
+        return [set()]
     if ext == ".odt":
         return [{"pandoc"}, {"libreoffice"}]
     if ext == ".odf":
+        return [{"libreoffice"}]
+    if ext == ".rtf":
         return [{"libreoffice"}]
     if ext == ".pdf":
         return [{"pymupdf"}, {"pdfminer"}]

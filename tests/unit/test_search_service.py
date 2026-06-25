@@ -66,6 +66,28 @@ def test_binary_document_search_uses_tika(monkeypatch: object, tmp_path: Path) -
     assert summary.results[0].matches[0].line == "Extracted target text"
 
 
+def test_rtf_search_uses_tika(monkeypatch: object, tmp_path: Path) -> None:
+    source = tmp_path / "source.rtf"
+    source.write_text(r"{\rtf1 target}", encoding="utf-8")
+    tika = tmp_path / "tika-app.jar"
+    tika.write_text("", encoding="utf-8")
+    java = tmp_path / "java.exe"
+    java.write_text("", encoding="utf-8")
+    settings = _settings()
+    settings.tika_app_path = str(tika)
+    settings.java_binary_path = str(java)
+
+    def fake_run(*_: object, **__: object) -> SimpleNamespace:
+        return SimpleNamespace(returncode=0, stdout="target in rtf\n", stderr="")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    summary = KeywordSearchService(settings).search_files([source], "target")
+
+    assert summary.total_matches == 1
+    assert summary.results[0].matches[0].line == "target in rtf"
+
+
 def test_binary_document_search_reports_missing_tika(tmp_path: Path) -> None:
     source = tmp_path / "source.docx"
     source.write_bytes(b"fake")

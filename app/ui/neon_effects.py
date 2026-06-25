@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 import wave
 from pathlib import Path
@@ -22,7 +23,7 @@ class _ToneBank(QObject):
         super().__init__(parent)
         self._effects: dict[str, QSoundEffect] = {}
         self._last_played: dict[str, float] = {}
-        if QSoundEffect is None:
+        if QSoundEffect is None or not _multimedia_enabled():
             return
         try:
             sound_dir = get_cache_dir() / "ui-sounds"
@@ -33,6 +34,9 @@ class _ToneBank(QObject):
                 "start": (sound_dir / "neon-start.wav", (440.0, 880.0), 0.09, 0.11),
                 "complete": (sound_dir / "neon-complete.wav", (660.0, 990.0), 0.12, 0.12),
                 "warning": (sound_dir / "neon-warning.wav", (196.0, 392.0), 0.12, 0.12),
+                "scan": (sound_dir / "neon-scan.wav", (1200.0, 1250.0, 1300.0), 0.15, 0.06),
+                "load": (sound_dir / "neon-load.wav", (300.0, 400.0, 500.0), 0.1, 0.07),
+                "ready": (sound_dir / "neon-ready.wav", (880.0, 1100.0, 1320.0), 0.25, 0.1),
             }
             for name, (path, freqs, duration, volume) in tones.items():
                 if not path.exists():
@@ -85,6 +89,13 @@ class _ToneBank(QObject):
                 pcm_sample = int(max(-1.0, min(1.0, sample)) * 32767)
                 frames.extend(pcm_sample.to_bytes(2, "little", signed=True))
             wav.writeframes(bytes(frames))
+
+
+def _multimedia_enabled() -> bool:
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    platform_name = os.environ.get("QT_QPA_PLATFORM", "").strip().lower()
+    return platform_name not in {"offscreen", "minimal"}
 
 
 class NeonUiEffects(QObject):

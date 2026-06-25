@@ -10,10 +10,11 @@ Omni to Markdown provides two workflows:
 ## Converter workflow
 
 1. Open the `Converter` tab.
-2. Click `Add Files`, `Add Folder`, or drag files/folders into the queue.
-3. Choose an output folder.
-4. Click `Run Preflight`.
-5. Click `Convert`.
+2. Use the quick-actions panel to review queue count, supported formats, and Explorer menu status.
+3. Click `Add Files`, `Add Folder`, or drag supported files/folders into the queue.
+4. Choose an output folder.
+5. Click `Run Preflight`.
+6. Click `Convert`.
 
 During conversion:
 
@@ -30,8 +31,8 @@ After completion:
 
 Both main tabs include keyword search for the current batch.
 
-Converter search scans queued `.doc`, `.docx`, `.pdf`, `.odt`, and `.odf` files through
-Apache Tika. Stitcher search scans the current Markdown list directly.
+Converter search scans queued `.doc`, `.docx`, `.htm`, `.html`, `.pdf`, `.odt`, `.odf`, and `.rtf` files through
+Apache Tika. Plain text and Markdown files are searched directly. Stitcher search scans the current Markdown list directly.
 
 Requirements for converter batch search:
 
@@ -66,6 +67,37 @@ Use `File -> Settings` from the main window to configure:
 - Default output directory.
 - Pandoc, LibreOffice, Java, and Apache Tika override paths.
 - Conversion behavior defaults.
+
+## Windows Explorer right-click access
+
+You can register a user-level Explorer shortcut for supported document types and folders,
+including `.doc`, `.docx`, `.htm`, `.html`, `.pdf`, `.odt`, `.odf`, `.rtf`, and `.txt`.
+
+1. Build the app or prepare the local virtual environment.
+2. Run:
+
+```powershell
+.\scripts\register_windows_context_menu.ps1
+```
+
+3. In Explorer, right-click a supported file or folder.
+4. Choose `Convert to Markdown with Omni`.
+5. The app opens with that selection queued automatically.
+
+The same installer also creates `Send to -> Omni to Markdown`, which is useful when
+you select multiple files and want Windows to pass them to Omni together.
+
+Check the current integration state without changing anything:
+
+```powershell
+.\scripts\check_windows_context_menu.ps1
+```
+
+Remove the shortcut later with:
+
+```powershell
+.\scripts\unregister_windows_context_menu.ps1
+```
 
 ## Notes
 

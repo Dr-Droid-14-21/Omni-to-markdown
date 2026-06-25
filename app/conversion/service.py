@@ -3,12 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from app.conversion.html_engine import HtmlEngine
 from app.conversion.libreoffice_engine import LibreOfficeEngine
 from app.conversion.mammoth_engine import MammothEngine
 from app.conversion.pandoc_engine import PandocEngine
 from app.conversion.pdf_pdfminer_engine import PDFMinerEngine
 from app.conversion.pdf_pymupdf_engine import PyMuPDFEngine
 from app.conversion.router import build_plan
+from app.conversion.text_engine import TextEngine
 from app.core.models import (
     ConversionError,
     ConversionPlan,
@@ -23,12 +25,16 @@ from app.core.settings import AppSettings, load_settings
 class ConversionService:
     def __init__(self, settings: AppSettings | None = None) -> None:
         self.settings = settings or load_settings()
+        self.html_engine = HtmlEngine()
+        self.text_engine = TextEngine()
         self.pandoc_engine = PandocEngine(settings=self.settings)
         self.mammoth_engine = MammothEngine(settings=self.settings)
         self.libreoffice_engine = LibreOfficeEngine(settings=self.settings)
         self.pymupdf_engine = PyMuPDFEngine()
         self.pdfminer_engine = PDFMinerEngine()
         self._engines = {
+            self.html_engine.name: self.html_engine,
+            self.text_engine.name: self.text_engine,
             self.pandoc_engine.name: self.pandoc_engine,
             self.mammoth_engine.name: self.mammoth_engine,
             self.libreoffice_engine.name: self.libreoffice_engine,

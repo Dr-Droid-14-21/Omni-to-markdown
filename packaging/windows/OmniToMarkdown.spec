@@ -7,11 +7,21 @@ from PyInstaller.utils.hooks import collect_submodules
 ROOT = Path(SPECPATH).parents[1]
 APP_ENTRY = ROOT / "app" / "main.py"
 APP_RESOURCES = ROOT / "app" / "resources"
+RUNTIME_SCRIPTS = ROOT / "scripts"
 TIKA_TOOLS = ROOT / "tools" / "tika"
 
 datas = [
     (str(APP_RESOURCES), "app/resources"),
 ]
+for script_name in (
+    "launch_omni.py",
+    "check_windows_context_menu.ps1",
+    "register_windows_context_menu.ps1",
+    "unregister_windows_context_menu.ps1",
+):
+    script_path = RUNTIME_SCRIPTS / script_name
+    if script_path.exists():
+        datas.append((str(script_path), "scripts"))
 if TIKA_TOOLS.exists():
     datas.append((str(TIKA_TOOLS), "tools/tika"))
 

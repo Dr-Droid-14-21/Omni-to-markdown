@@ -2,16 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, QThread, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
-    QProgressBar,
     QPushButton,
+    QSizePolicy,
     QStyle,
     QVBoxLayout,
     QWidget,
@@ -32,8 +34,11 @@ from app.core.models import ConversionResult
 from app.core.settings import load_settings
 from app.search import format_search_summary
 from app.ui.button_metrics import apply_button_metrics_to
+from app.ui.widgets.cut_corner_panel import CutCornerPanel
 from app.ui.widgets.file_queue_table import FileQueueTable
+from app.ui.widgets.scifi_progress_bar import SciFiProgressBar
 from app.ui.widgets.warning_panel import WarningPanel
+from app.windows_integration import explorer_integration_status, run_context_menu_registration
 from app.workers.conversion_worker import ConversionWorker
 from app.workers.search_worker import SearchWorker
 
@@ -57,9 +62,8 @@ class ConverterTab(QWidget):
     def _setup_ui(self) -> None:
         self.setObjectName("converterTab")
         root = QVBoxLayout(self)
-        root.setAlignment(Qt.AlignmentFlag.AlignTop)
-        root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(16)
+        root.setContentsMargins(20, 14, 20, 10)
+        root.setSpacing(7)
 
         title = QLabel("OMNI CONVERTER // LOCAL DOCUMENT PIPELINE")
         title.setObjectName("tabTitle")
@@ -67,6 +71,7 @@ class ConverterTab(QWidget):
         subtitle = QLabel("Queue supported documents, verify engines, then convert to Markdown.")
         subtitle.setObjectName("tabSubtitle")
         root.addWidget(subtitle)
+        root.addWidget(self._build_quick_access_panel())
 
         top_actions = QHBoxLayout()
         top_actions.setSpacing(12)
@@ -103,7 +108,11 @@ class ConverterTab(QWidget):
         root.addLayout(output_row)
 
         self.queue_table = FileQueueTable()
-        root.addWidget(self.queue_table)
+        self.queue_table.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        root.addWidget(self.queue_table, 3)
 
         search_row = QHBoxLayout()
         search_row.setSpacing(12)
@@ -127,7 +136,12 @@ class ConverterTab(QWidget):
         self.search_status_label.setObjectName("searchStatusLabel")
         root.addWidget(self.search_status_label)
         self.search_results_panel = WarningPanel()
-        self.search_results_panel.setMaximumHeight(150)
+        self.search_results_panel.setMinimumHeight(34)
+        self.search_results_panel.setMaximumHeight(58)
+        self.search_results_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         root.addWidget(self.search_results_panel)
 
         action_row = QHBoxLayout()
@@ -153,18 +167,102 @@ class ConverterTab(QWidget):
         action_row.addWidget(self.retry_failed_button)
         root.addLayout(action_row)
 
-        self.progress_bar = QProgressBar()
+        self.progress_bar = SciFiProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         root.addWidget(self.progress_bar)
 
         root.addWidget(QLabel("Warnings"))
         self.warning_panel = WarningPanel()
+        self.warning_panel.setMinimumHeight(36)
+        self.warning_panel.setMaximumHeight(60)
+        self.warning_panel.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
         root.addWidget(self.warning_panel)
 
         apply_button_metrics_to(self)
         self._apply_accessibility()
         self._connect_signals()
+        self._refresh_queue_summary()
+        self._refresh_explorer_status()
+
+    def _build_quick_access_panel(self) -> QWidget:
+        card = CutCornerPanel(self)
+        card.setObjectName("heroPanel")
+        card.setMaximumHeight(144)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(5)
+
+        hero_title = QLabel("Drop, route, and convert from Explorer in one flow.")
+        hero_title.setObjectName("heroTitle")
+        layout.addWidget(hero_title)
+
+        hero_copy = QLabel(
+            "Drag documents or folders into the queue, or install the Windows right-click "
+            "menu so supported files can land directly in Omni to Markdown."
+        )
+        hero_copy.setObjectName("heroCopy")
+        hero_copy.setWordWrap(True)
+        hero_copy.setMaximumHeight(32)
+        layout.addWidget(hero_copy)
+
+        metrics = QGridLayout()
+        metrics.setHorizontalSpacing(18)
+        metrics.setVerticalSpacing(8)
+        self.queue_count_value = QLabel("0")
+        self.queue_count_value.setObjectName("metricValue")
+        self.supported_formats_value = QLabel(str(len(SUPPORTED_EXTENSIONS)))
+        self.supported_formats_value.setObjectName("metricValue")
+        self.explorer_status_value = QLabel("Checking...")
+        self.explorer_status_value.setObjectName("metricValue")
+        self.queue_count_caption = QLabel("Queued files")
+        self.queue_count_caption.setObjectName("metricCaption")
+        self.supported_formats_caption = QLabel("Supported formats")
+        self.supported_formats_caption.setObjectName("metricCaption")
+        self.explorer_status_caption = QLabel("Explorer quick action")
+        self.explorer_status_caption.setObjectName("metricCaption")
+        metrics.addWidget(self.queue_count_value, 0, 0)
+        metrics.addWidget(self.supported_formats_value, 0, 1)
+        metrics.addWidget(self.explorer_status_value, 0, 2)
+        metrics.addWidget(self.queue_count_caption, 1, 0)
+        metrics.addWidget(self.supported_formats_caption, 1, 1)
+        metrics.addWidget(self.explorer_status_caption, 1, 2)
+        layout.addLayout(metrics)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(8)
+        style = self.style()
+        self.install_explorer_button = QPushButton("Install Explorer Menu")
+        self.install_explorer_button.setProperty("uiRole", "secondary")
+        self.install_explorer_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
+        )
+        self.remove_explorer_button = QPushButton("Remove Explorer Menu")
+        self.remove_explorer_button.setProperty("uiRole", "quiet")
+        self.remove_explorer_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton)
+        )
+        self.open_output_folder_button = QPushButton("Open Output Folder")
+        self.open_output_folder_button.setProperty("uiRole", "secondary")
+        self.open_output_folder_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
+        )
+        actions.addWidget(self.install_explorer_button)
+        actions.addWidget(self.remove_explorer_button)
+        actions.addWidget(self.open_output_folder_button)
+        actions.addStretch()
+        layout.addLayout(actions)
+
+        self.explorer_status_detail = QLabel("")
+        self.explorer_status_detail.setObjectName("heroCopy")
+        self.explorer_status_detail.setWordWrap(False)
+        self.explorer_status_detail.setMaximumHeight(18)
+        layout.addWidget(self.explorer_status_detail)
+
+        return card
 
     def _apply_accessibility(self) -> None:
         self.add_files_button.setAccessibleName("Add document files")
@@ -184,7 +282,8 @@ class ConverterTab(QWidget):
         self.browse_output_button.setToolTip("Choose the output folder.")
         self.queue_table.setAccessibleName("Conversion queue")
         self.queue_table.setAccessibleDescription(
-            "Queued source files with type, status, selected engine route, and warning count."
+            "Queued source files with type, status, selected engine route, and warning count. "
+            f"{self.queue_table.empty_state_text()}"
         )
         self.search_query_edit.setAccessibleName("Batch keyword search query")
         self.search_query_edit.setToolTip("Search for a keyword or phrase in queued files.")
@@ -212,6 +311,18 @@ class ConverterTab(QWidget):
 
         self.progress_bar.setAccessibleName("Conversion progress")
         self.warning_panel.setAccessibleName("Conversion warnings and errors")
+        self.install_explorer_button.setAccessibleName("Install Windows Explorer menu")
+        self.install_explorer_button.setToolTip(
+            "Add a user-level right-click entry for supported files and folders."
+        )
+        self.remove_explorer_button.setAccessibleName("Remove Windows Explorer menu")
+        self.remove_explorer_button.setToolTip(
+            "Remove the Omni to Markdown right-click entry from Explorer."
+        )
+        self.open_output_folder_button.setAccessibleName("Open conversion output folder")
+        self.open_output_folder_button.setToolTip(
+            "Open the current Markdown output folder in Windows Explorer."
+        )
 
     def _connect_signals(self) -> None:
         self.add_files_button.clicked.connect(self._on_add_files)
@@ -228,13 +339,16 @@ class ConverterTab(QWidget):
         self.clear_search_button.clicked.connect(self._on_clear_search_results)
         self.search_query_edit.returnPressed.connect(self._on_search_batch)
         self.queue_table.dropped_paths.connect(self._on_paths_dropped)
+        self.install_explorer_button.clicked.connect(self._on_install_explorer_menu)
+        self.remove_explorer_button.clicked.connect(self._on_remove_explorer_menu)
+        self.open_output_folder_button.clicked.connect(self._on_open_output_folder)
 
     def _on_add_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(
             self,
             "Select documents",
             "",
-            "Documents (*.doc *.docx *.pdf *.odt *.odf);;All files (*.*)",
+            "Documents (*.doc *.docx *.htm *.html *.pdf *.odt *.odf *.rtf *.txt);;All files (*.*)",
         )
         self._add_paths([Path(item) for item in files])
 
@@ -248,7 +362,45 @@ class ConverterTab(QWidget):
     def _on_paths_dropped(self, paths: list[str]) -> None:
         if self._is_converting:
             return
+        self._play_sound("scan")
         self._add_paths(self._expand_supported_paths([Path(item) for item in paths]))
+
+    def import_launch_paths(self, paths: list[Path], *, auto_convert: bool = False) -> None:
+        expanded_paths = self._expand_supported_paths(paths)
+        existing_rows = self.queue_table.rowCount()
+        self._add_paths(expanded_paths)
+        added_rows = self.queue_table.rowCount() - existing_rows
+
+        if added_rows == 0:
+            return
+
+        if auto_convert:
+            if self._run_preflight_on_queue(show_success=False):
+                self._on_convert()
+
+    def _on_install_explorer_menu(self) -> None:
+        result = run_context_menu_registration(install=True)
+        self._handle_explorer_registration_result(
+            action="install",
+            success_message=(
+                "Explorer integration installed. Right-click supported files or folders, "
+                "or use Send to -> Omni to Markdown."
+            ),
+            result=result,
+        )
+
+    def _on_remove_explorer_menu(self) -> None:
+        result = run_context_menu_registration(install=False)
+        self._handle_explorer_registration_result(
+            action="remove",
+            success_message="Explorer integration removed.",
+            result=result,
+        )
+
+    def _on_open_output_folder(self) -> None:
+        output_dir = Path(self.output_folder_edit.text().strip())
+        output_dir.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(output_dir)))
 
     def _on_remove_selected(self) -> None:
         selected_rows = sorted(
@@ -264,6 +416,7 @@ class ConverterTab(QWidget):
                     self._retry_failed_paths.discard(value)
             self.queue_table.removeRow(row)
         self._mark_preflight_dirty()
+        self._refresh_queue_summary()
 
     def _on_clear(self) -> None:
         self.queue_table.setRowCount(0)
@@ -274,7 +427,9 @@ class ConverterTab(QWidget):
         self.search_status_label.setText("Search ready.")
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
+        self.progress_bar.stop_fx()
         self._mark_preflight_dirty()
+        self._refresh_queue_summary()
 
     def _on_pick_output_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Select output folder")
@@ -330,22 +485,23 @@ class ConverterTab(QWidget):
                 self._append_warning(f"{path.name}: [{warning.code}] {warning.message}")
 
         self._mark_preflight_dirty()
+        self._refresh_queue_summary()
 
-    def _run_preflight_on_queue(self) -> None:
+    def _run_preflight_on_queue(self, *, show_success: bool = True) -> bool:
         if self._is_converting:
-            return
+            return False
 
         output_dir = Path(self.output_folder_edit.text().strip())
         is_writable, reason = check_output_directory_writable(output_dir)
         if not is_writable:
             QMessageBox.critical(self, "Preflight failed", reason)
             self._mark_preflight_dirty()
-            return
+            return False
 
         if self.queue_table.rowCount() == 0:
             QMessageBox.information(self, "Preflight", "Queue is empty.")
             self._mark_preflight_dirty()
-            return
+            return False
 
         self._settings = load_settings()
         dependencies = detect_all_dependencies(self._settings)
@@ -386,15 +542,17 @@ class ConverterTab(QWidget):
                 "Update settings or install tools before conversion.",
             )
             self._mark_preflight_dirty()
-            return
+            return False
 
         self._preflight_ok = True
         self.convert_button.setEnabled(True)
-        QMessageBox.information(
-            self,
-            "Preflight",
-            f"Preflight passed for {self.queue_table.rowCount()} queued file(s).",
-        )
+        if show_success:
+            QMessageBox.information(
+                self,
+                "Preflight",
+                f"Preflight passed for {self.queue_table.rowCount()} queued file(s).",
+            )
+        return True
 
     def _on_convert(self) -> None:
         if self._is_converting:
@@ -421,7 +579,8 @@ class ConverterTab(QWidget):
         self._cancel_requested = False
 
         self._set_conversion_running_state(True)
-        self._play_sound("start")
+        self._play_sound("load")
+        self.progress_bar.start_fx()
         self._start_worker(queued_paths, output_dir)
 
     def _on_cancel(self) -> None:
@@ -471,7 +630,8 @@ class ConverterTab(QWidget):
         self._cancel_requested = False
 
         self._set_conversion_running_state(True)
-        self._play_sound("start")
+        self._play_sound("load")
+        self.progress_bar.start_fx()
         self._start_worker(retry_paths, output_dir)
 
     def _on_search_batch(self) -> None:
@@ -490,7 +650,7 @@ class ConverterTab(QWidget):
         self.search_results_panel.setPlainText("Searching queued files...")
         self.search_status_label.setText("Searching...")
         self._set_search_running_state(True)
-        self._play_sound("start")
+        self._play_sound("load")
         self._start_search_worker(queued_paths, query, self.search_case_check.isChecked())
 
     def _on_clear_search_results(self) -> None:
@@ -536,7 +696,7 @@ class ConverterTab(QWidget):
         self.search_status_label.setText(
             f"{summary.total_matches} match(es) in {summary.files_with_matches} file(s)."
         )
-        self._play_sound("complete" if summary.total_matches else "warning")
+        self._play_sound("ready" if summary.total_matches else "warning")
 
     def _on_search_failed(self, message: str) -> None:
         self.search_results_panel.setPlainText(f"Search failed: {message}")
@@ -620,7 +780,7 @@ class ConverterTab(QWidget):
             f"Converted: {converted}, Failed: {failed}, Cancelled: {cancelled}\n"
             f"Reports:\n{json_path}\n{markdown_path}",
         )
-        self._play_sound("complete" if failed == 0 and cancelled == 0 else "warning")
+        self._play_sound("ready" if failed == 0 and cancelled == 0 else "warning")
         self._cancel_requested = False
         self._mark_preflight_dirty()
 
@@ -637,6 +797,7 @@ class ConverterTab(QWidget):
         self._active_worker = None
         self._active_thread = None
         self._set_conversion_running_state(False)
+        self.progress_bar.stop_fx()
 
     def _set_conversion_running_state(self, running: bool) -> None:
         self._is_converting = running
@@ -654,6 +815,7 @@ class ConverterTab(QWidget):
         else:
             self.convert_button.setEnabled(self._preflight_ok and self.queue_table.rowCount() > 0)
             self.retry_failed_button.setEnabled(bool(self._retry_failed_paths))
+        self._refresh_explorer_status()
 
     def _mark_inflight_rows_failed(self) -> None:
         for row in range(self.queue_table.rowCount()):
@@ -671,6 +833,7 @@ class ConverterTab(QWidget):
         self._settings = load_settings()
         self.output_folder_edit.setText(self._settings.default_output_directory)
         self._mark_preflight_dirty()
+        self._refresh_explorer_status()
 
     def _append_warning(self, message: str) -> None:
         current = self.warning_panel.toPlainText()
@@ -700,3 +863,59 @@ class ConverterTab(QWidget):
         }
         available = set(self.queue_table.queued_paths())
         return {path for path in failed_paths if path in available}
+
+    def _refresh_queue_summary(self) -> None:
+        queue_count = self.queue_table.rowCount()
+        self.queue_count_value.setText(str(queue_count))
+        active_extensions = sorted(self.queue_table.queued_extensions())
+        if active_extensions:
+            self.supported_formats_caption.setText(
+                f"Supported formats // active: {', '.join(active_extensions)}"
+            )
+        else:
+            self.supported_formats_caption.setText("Supported formats")
+
+    def _refresh_explorer_status(self) -> None:
+        status = explorer_integration_status()
+        explorer_complete = status.installed and status.sendto_installed
+        if explorer_complete:
+            self.explorer_status_value.setText("Installed")
+        elif status.available:
+            self.explorer_status_value.setText("Ready")
+        else:
+            self.explorer_status_value.setText("Setup")
+        self.explorer_status_detail.setText(status.detail)
+        self.install_explorer_button.setEnabled(status.available and not self._is_converting)
+        self.remove_explorer_button.setEnabled(
+            (status.installed or status.sendto_installed) and not self._is_converting
+        )
+        self.open_output_folder_button.setEnabled(not self._is_converting)
+
+    def _handle_explorer_registration_result(
+        self,
+        *,
+        action: str,
+        success_message: str,
+        result: object,
+    ) -> None:
+        returncode = getattr(result, "returncode", 1)
+        timed_out = bool(getattr(result, "timed_out", False))
+        stdout = str(getattr(result, "stdout", ""))
+        stderr = str(getattr(result, "stderr", ""))
+
+        if timed_out:
+            QMessageBox.critical(
+                self,
+                "Explorer integration",
+                f"Explorer menu {action} timed out.",
+            )
+        elif returncode != 0:
+            detail = stderr.strip() or stdout.strip() or "Unknown error."
+            QMessageBox.critical(
+                self,
+                "Explorer integration",
+                f"Failed to {action} Explorer integration.\n\n{detail}",
+            )
+        else:
+            QMessageBox.information(self, "Explorer integration", success_message)
+        self._refresh_explorer_status()

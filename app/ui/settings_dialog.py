@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -22,6 +23,10 @@ from PySide6.QtWidgets import (
 from app.core.settings import AppSettings, load_settings, save_settings
 from app.ui.button_metrics import apply_button_metrics_to
 from app.ui.neon_effects import NeonUiEffects
+from app.windows_integration import (
+    explorer_integration_status,
+    run_context_menu_registration,
+)
 
 
 class SettingsDialog(QDialog):
@@ -38,6 +43,7 @@ class SettingsDialog(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(24, 22, 24, 22)
         root.setSpacing(14)
+        root.addWidget(self._build_overview_panel())
         form = QFormLayout()
         form.setHorizontalSpacing(14)
         form.setVerticalSpacing(12)
@@ -93,10 +99,56 @@ class SettingsDialog(QDialog):
 
         self.cancel_button.clicked.connect(self.reject)
         self.save_button.clicked.connect(self._on_save)
+        self.install_explorer_button.clicked.connect(self._on_install_explorer_menu)
+        self.remove_explorer_button.clicked.connect(self._on_remove_explorer_menu)
         apply_button_metrics_to(self)
         self._apply_accessibility()
         self._ui_fx = NeonUiEffects(self)
         self._ui_fx.install()
+        self._refresh_explorer_status()
+
+    def _build_overview_panel(self) -> QWidget:
+        card = QFrame(self)
+        card.setObjectName("heroPanel")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
+        title = QLabel("System paths, engine overrides, and Windows integration.")
+        title.setObjectName("heroTitle")
+        layout.addWidget(title)
+
+        copy = QLabel(
+            "Use this panel to keep the desktop build dependable: set conversion engine "
+            "paths, tune defaults, and control the Explorer right-click workflow from one place."
+        )
+        copy.setObjectName("heroCopy")
+        copy.setWordWrap(True)
+        layout.addWidget(copy)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(12)
+        style = self.style()
+        self.install_explorer_button = QPushButton("Install Explorer Menu")
+        self.install_explorer_button.setProperty("uiRole", "secondary")
+        self.install_explorer_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_DialogApplyButton)
+        )
+        self.remove_explorer_button = QPushButton("Remove Explorer Menu")
+        self.remove_explorer_button.setProperty("uiRole", "quiet")
+        self.remove_explorer_button.setIcon(
+            style.standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton)
+        )
+        actions.addWidget(self.install_explorer_button)
+        actions.addWidget(self.remove_explorer_button)
+        actions.addStretch()
+        layout.addLayout(actions)
+
+        self.explorer_status_label = QLabel("")
+        self.explorer_status_label.setObjectName("heroCopy")
+        self.explorer_status_label.setWordWrap(True)
+        layout.addWidget(self.explorer_status_label)
+        return card
 
     def _apply_accessibility(self) -> None:
         self.output_dir_edit.setAccessibleName("Default output directory")
@@ -121,6 +173,14 @@ class SettingsDialog(QDialog):
         self.privacy_mode_check.setToolTip("Keep reports and logs free of document body text.")
         self.cancel_button.setAccessibleName("Cancel settings")
         self.save_button.setAccessibleName("Save settings")
+        self.install_explorer_button.setAccessibleName("Install Windows Explorer menu")
+        self.install_explorer_button.setToolTip(
+            "Install a user-level right-click entry for supported files and folders."
+        )
+        self.remove_explorer_button.setAccessibleName("Remove Windows Explorer menu")
+        self.remove_explorer_button.setToolTip(
+            "Remove the Omni to Markdown right-click entry from Explorer."
+        )
 
     def _with_browse(self, edit: QLineEdit, handler: Callable[[], None]) -> QWidget:
         container = QWidget(self)
@@ -206,3 +266,51 @@ class SettingsDialog(QDialog):
         )
         save_settings(settings)
         self.accept()
+
+    def _on_install_explorer_menu(self) -> None:
+        result = run_context_menu_registration(install=True)
+        self._handle_explorer_result(
+            action="install",
+            success_message="Explorer menu and SendTo shortcut installed.",
+            result=result,
+        )
+
+    def _on_remove_explorer_menu(self) -> None:
+        result = run_context_menu_registration(install=False)
+        self._handle_explorer_result(
+            action="remove",
+            success_message="Explorer integration removed.",
+            result=result,
+        )
+
+    def _refresh_explorer_status(self) -> None:
+        status = explorer_integration_status()
+        explorer_complete = status.installed and status.sendto_installed
+        self.explorer_status_label.setText(status.detail)
+        self.install_explorer_button.setEnabled(status.available and not explorer_complete)
+        self.remove_explorer_button.setEnabled(status.installed or status.sendto_installed)
+
+    def _handle_explorer_result(
+        self,
+        *,
+        action: str,
+        success_message: str,
+        result: object,
+    ) -> None:
+        returncode = getattr(result, "returncode", 1)
+        timed_out = bool(getattr(result, "timed_out", False))
+        stdout = str(getattr(result, "stdout", ""))
+        stderr = str(getattr(result, "stderr", ""))
+
+        if timed_out:
+            QMessageBox.critical(self, "Explorer integration", f"{action.title()} timed out.")
+        elif returncode != 0:
+            detail = stderr.strip() or stdout.strip() or "Unknown error."
+            QMessageBox.critical(
+                self,
+                "Explorer integration",
+                f"Failed to {action} Explorer integration.\n\n{detail}",
+            )
+        else:
+            QMessageBox.information(self, "Explorer integration", success_message)
+        self._refresh_explorer_status()

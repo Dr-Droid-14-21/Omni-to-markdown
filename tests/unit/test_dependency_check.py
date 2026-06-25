@@ -25,8 +25,11 @@ def test_required_dependencies_mapping() -> None:
     assert required_dependencies_for_extension(".doc") == {"libreoffice"}
     assert required_dependencies_for_extension(".odf") == {"libreoffice"}
     assert required_dependencies_for_extension(".docx") == {"pandoc"}
+    assert required_dependencies_for_extension(".html") == set()
     assert required_dependencies_for_extension(".odt") == {"pandoc"}
     assert required_dependencies_for_extension(".pdf") == {"pymupdf"}
+    assert required_dependencies_for_extension(".rtf") == {"libreoffice"}
+    assert required_dependencies_for_extension(".txt") == set()
 
 
 def test_dependency_route_options_mapping() -> None:
@@ -36,7 +39,10 @@ def test_dependency_route_options_mapping() -> None:
         {"libreoffice"},
     ]
     assert dependency_route_options_for_extension(".odt") == [{"pandoc"}, {"libreoffice"}]
+    assert dependency_route_options_for_extension(".html") == [set(), {"pandoc"}]
     assert dependency_route_options_for_extension(".pdf") == [{"pymupdf"}, {"pdfminer"}]
+    assert dependency_route_options_for_extension(".rtf") == [{"libreoffice"}]
+    assert dependency_route_options_for_extension(".txt") == [set()]
 
 
 def test_override_path_missing_marks_unavailable(tmp_path: Path) -> None:

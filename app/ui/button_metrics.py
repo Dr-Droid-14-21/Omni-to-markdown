@@ -14,11 +14,11 @@ class ButtonMetric:
 
 
 BUTTON_METRICS = {
-    "hero": ButtonMetric(min_height=54, min_width=158, icon_size=QSize(26, 26)),
-    "primary": ButtonMetric(min_height=50, min_width=138, icon_size=QSize(24, 24)),
-    "secondary": ButtonMetric(min_height=46, min_width=124, icon_size=QSize(22, 22)),
-    "quiet": ButtonMetric(min_height=46, min_width=108, icon_size=QSize(22, 22)),
-    "danger": ButtonMetric(min_height=46, min_width=116, icon_size=QSize(22, 22)),
+    "hero": ButtonMetric(min_height=46, min_width=142, icon_size=QSize(22, 22)),
+    "primary": ButtonMetric(min_height=44, min_width=126, icon_size=QSize(22, 22)),
+    "secondary": ButtonMetric(min_height=40, min_width=112, icon_size=QSize(20, 20)),
+    "quiet": ButtonMetric(min_height=40, min_width=98, icon_size=QSize(20, 20)),
+    "danger": ButtonMetric(min_height=40, min_width=108, icon_size=QSize(20, 20)),
 }
 
 
@@ -26,6 +26,7 @@ def apply_button_metrics(button: QPushButton) -> None:
     role = str(button.property("uiRole") or "secondary")
     metric = BUTTON_METRICS.get(role, BUTTON_METRICS["secondary"])
     button.setMinimumHeight(metric.min_height)
+    button.setMaximumHeight(metric.min_height)
     button.setIconSize(metric.icon_size)
 
     text = button.text().strip()
@@ -33,7 +34,7 @@ def apply_button_metrics(button: QPushButton) -> None:
         return
 
     text_width = button.fontMetrics().horizontalAdvance(text)
-    readable_width = text_width + metric.icon_size.width() + 48
+    readable_width = text_width + metric.icon_size.width() + 38
     button.setMinimumWidth(max(metric.min_width, readable_width))
 
 

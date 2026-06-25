@@ -22,7 +22,7 @@ from app.core.settings import AppSettings, load_settings
 
 class LibreOfficeEngine(ConversionEngine):
     name = "libreoffice"
-    supported_extensions = {".doc", ".docx", ".odt", ".odf"}
+    supported_extensions = {".doc", ".docx", ".odt", ".odf", ".rtf"}
 
     def __init__(self, settings: AppSettings | None = None, timeout_seconds: int = 180) -> None:
         self.settings = settings or load_settings()

@@ -9,7 +9,19 @@ from pathlib import Path
 from app.core.settings import AppSettings
 from app.search.tika_locator import resolve_tika_app_path
 
-SEARCHABLE_EXTENSIONS = {".md", ".markdown", ".txt", ".doc", ".docx", ".odt", ".odf", ".pdf"}
+SEARCHABLE_EXTENSIONS = {
+    ".md",
+    ".markdown",
+    ".txt",
+    ".doc",
+    ".docx",
+    ".htm",
+    ".html",
+    ".odt",
+    ".odf",
+    ".pdf",
+    ".rtf",
+}
 PLAIN_TEXT_EXTENSIONS = {".md", ".markdown", ".txt"}
 MAX_RESULT_LINE_LENGTH = 320
 

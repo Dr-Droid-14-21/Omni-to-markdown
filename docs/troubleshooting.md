@@ -7,7 +7,7 @@ Check the required engines:
 - `pandoc` for preferred `.docx`/`.odt` paths.
 - `mammoth` or `libreoffice` as fallback `.docx` routes.
 - `pymupdf` or `pdfminer` for `.pdf`.
-- `libreoffice` for `.doc` and `.odf`.
+- `libreoffice` for `.doc`, `.odf`, and `.rtf`.
 
 Actions:
 
@@ -26,7 +26,7 @@ Then retry only failed files using `Retry Failed`.
 
 ## LibreOffice timeout
 
-If large `.doc` or `.odf` files time out:
+If large `.doc`, `.odf`, or `.rtf` files time out:
 
 1. Retry with a smaller batch.
 2. Ensure LibreOffice is not blocked by first-run dialogs.
@@ -50,3 +50,22 @@ Common causes:
 - UTF-8 decoding issues in input files.
 
 Use the Stitcher warning area and dialog message to identify which file triggered failure.
+
+## Windows blocked the packaged app
+
+If Smart App Control or Microsoft Defender blocks `OmniToMarkdown.exe`, the usual cause is that the local PyInstaller build is unsigned and has no publisher reputation yet.
+
+For local development:
+
+1. Run from source with `python -m app.main`.
+2. Validate the package with `.\scripts\validate_windows_build.ps1`.
+3. Only relax Windows security settings on your own machine if you understand the tradeoff.
+
+For release distribution:
+
+1. Install the Authenticode code-signing certificate in `Cert:\CurrentUser\My`.
+2. Set `OMNI_CODE_SIGN_CERT_THUMBPRINT` to the certificate thumbprint.
+3. Build and sign with `.\scripts\build_windows.ps1 -Sign`.
+4. Run `.\scripts\validate_windows_build.ps1 -RequireSignature`.
+
+Unsigned builds are acceptable for local testing, but they are not release-quality Windows artifacts.

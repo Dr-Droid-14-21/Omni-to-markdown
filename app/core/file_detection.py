@@ -8,10 +8,21 @@ from pathlib import Path
 
 from app.core.models import ConversionWarning
 
-SUPPORTED_EXTENSIONS = {".doc", ".docx", ".pdf", ".odt", ".odf"}
+SUPPORTED_EXTENSIONS = {
+    ".doc",
+    ".docx",
+    ".htm",
+    ".html",
+    ".pdf",
+    ".odt",
+    ".odf",
+    ".rtf",
+    ".txt",
+}
 PDF_MAGIC = b"%PDF-"
 ZIP_MAGIC = b"PK"
 OLE_MAGIC = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
+RTF_MAGIC = b"{\\rtf"
 
 
 @dataclass(slots=True)
@@ -105,6 +116,14 @@ def _header_checks(source: Path, preflight: FilePreflight) -> None:
                     ),
                 )
             )
+    elif preflight.extension == ".rtf":
+        if not header.lower().startswith(RTF_MAGIC):
+            preflight.warnings.append(
+                ConversionWarning(
+                    code="HEADER_MISMATCH",
+                    message="Extension is .rtf but file signature does not look like RTF.",
+                )
+            )
     elif preflight.extension == ".odf":
         preflight.warnings.append(
             ConversionWarning(
@@ -123,9 +142,13 @@ def _kind_for_extension(extension: str) -> str:
     return {
         ".doc": "word-legacy",
         ".docx": "word-openxml",
+        ".htm": "html",
+        ".html": "html",
         ".pdf": "pdf",
         ".odt": "opendocument-text",
         ".odf": "opendocument-formula-or-generic",
+        ".rtf": "rich-text",
+        ".txt": "plain-text",
     }.get(extension, "unknown")
 
 

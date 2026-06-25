@@ -4,7 +4,17 @@ from pathlib import Path
 
 from app.core.models import ConversionPlan, ConversionWarning
 
-SUPPORTED_EXTENSIONS = {".doc", ".docx", ".pdf", ".odt", ".odf"}
+SUPPORTED_EXTENSIONS = {
+    ".doc",
+    ".docx",
+    ".htm",
+    ".html",
+    ".pdf",
+    ".odt",
+    ".odf",
+    ".rtf",
+    ".txt",
+}
 
 
 def build_plan(source_path: Path, output_path: Path) -> ConversionPlan:
@@ -32,7 +42,7 @@ def build_plan(source_path: Path, output_path: Path) -> ConversionPlan:
         preferred_engine=preferred_engine,
         fallback_engines=fallback,
         warnings=warnings,
-        requires_external_tools=ext in {".doc", ".docx", ".odt", ".odf"},
+        requires_external_tools=ext in {".doc", ".docx", ".odt", ".odf", ".rtf"},
         estimated_risk_level=_risk_level_for(ext),
     )
 
@@ -45,8 +55,12 @@ def _preferred_engine_for(extension: str) -> str:
             return "pandoc"
         case ".doc":
             return "libreoffice"
-        case ".odf":
+        case ".odf" | ".rtf":
             return "libreoffice"
+        case ".htm" | ".html":
+            return "html"
+        case ".txt":
+            return "text"
         case ".pdf":
             return "pymupdf"
         case _:
@@ -63,6 +77,8 @@ def _fallback_engines_for(extension: str) -> list[str]:
             return ["pandoc"]
         case ".odf":
             return ["text-fallback"]
+        case ".htm" | ".html":
+            return ["pandoc"]
         case ".pdf":
             return ["pdfminer"]
         case _:
@@ -72,8 +88,12 @@ def _fallback_engines_for(extension: str) -> list[str]:
 def _risk_level_for(extension: str) -> str:
     return {
         ".docx": "low",
+        ".htm": "low",
+        ".html": "low",
         ".odt": "low",
         ".pdf": "medium",
+        ".rtf": "medium",
         ".doc": "high",
         ".odf": "high",
+        ".txt": "low",
     }.get(extension, "high")

@@ -20,13 +20,47 @@ def test_detect_pdf_header_ok(tmp_path: Path) -> None:
 
 
 def test_detect_unsupported_extension(tmp_path: Path) -> None:
-    txt = tmp_path / "notes.txt"
-    _write_bytes(txt, b"hello")
+    source = tmp_path / "notes.xyz"
+    _write_bytes(source, b"hello")
 
-    preflight = detect_file(txt)
+    preflight = detect_file(source)
 
     assert preflight.supported is False
     assert "Unsupported file extension" in preflight.error
+
+
+def test_detect_html_is_supported(tmp_path: Path) -> None:
+    source = tmp_path / "page.html"
+    _write_bytes(source, b"<html><body><h1>Hello</h1></body></html>")
+
+    preflight = detect_file(source)
+
+    assert preflight.error == ""
+    assert preflight.supported is True
+    assert preflight.detected_kind == "html"
+
+
+def test_detect_rtf_is_supported(tmp_path: Path) -> None:
+    source = tmp_path / "notes.rtf"
+    _write_bytes(source, b"{\\rtf1\\ansi Hello}")
+
+    preflight = detect_file(source)
+
+    assert preflight.error == ""
+    assert preflight.supported is True
+    assert preflight.detected_kind == "rich-text"
+    assert preflight.warnings == []
+
+
+def test_detect_txt_is_supported(tmp_path: Path) -> None:
+    source = tmp_path / "notes.txt"
+    _write_bytes(source, b"Plain text")
+
+    preflight = detect_file(source)
+
+    assert preflight.error == ""
+    assert preflight.supported is True
+    assert preflight.detected_kind == "plain-text"
 
 
 def test_detect_header_mismatch_warning(tmp_path: Path) -> None:

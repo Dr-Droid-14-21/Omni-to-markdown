@@ -4,17 +4,19 @@ Omni to Markdown is a Windows 11-first, local desktop app that converts supporte
 
 ## Current scope
 
-- Converter support for `.doc`, `.docx`, `.pdf`, `.odt`, `.odf`.
+- Converter support for `.doc`, `.docx`, `.htm`, `.html`, `.pdf`, `.odt`, `.odf`, `.rtf`, `.txt`.
 - Multi-engine routing with fallback:
   - `pandoc`, `mammoth`, `libreoffice` for office formats.
+  - local HTML conversion with `pandoc` fallback for `.htm` and `.html`.
   - `pymupdf` primary + `pdfminer` fallback for PDFs.
 - Run report generation (`json` + `markdown`) after each conversion batch.
-- Batch keyword search across queued `.doc`, `.docx`, `.pdf`, `.odt`, `.odf`, and Markdown files.
+- Batch keyword search across queued `.doc`, `.docx`, `.htm`, `.html`, `.pdf`, `.odt`, `.odf`, `.rtf`, `.txt`, and Markdown files.
 - Deterministic Markdown stitcher with exact separator format.
 - Stitch tray save/load support for reusable stitch queues.
 - Neon-styled Windows GUI with action icons, drag/drop queues, accessibility names, tooltips, startup splash, and UI sounds.
 - Markdown image path rewrite helpers for conversion cleanup.
 - Threaded GUI execution with cancel/retry for converter and cancel for stitcher.
+- Windows Explorer launch-path support plus optional right-click context-menu install scripts.
 - Unit + integration test baseline with skip-aware dependency tests and PDF fixture coverage.
 
 ## Supported routes
@@ -25,7 +27,10 @@ Omni to Markdown is a Windows 11-first, local desktop app that converts supporte
 | `.odt` | `pandoc` | `libreoffice` |
 | `.doc` | `libreoffice` | none |
 | `.odf` | `libreoffice` | none |
+| `.htm`, `.html` | `html` | `pandoc` |
 | `.pdf` | `pymupdf` | `pdfminer` |
+| `.rtf` | `libreoffice` | none |
+| `.txt` | `text` | none |
 
 ## Run locally
 
@@ -85,6 +90,57 @@ python -m ruff check .
 ```
 
 The Windows build uses `packaging/windows/OmniToMarkdown.spec` and writes an onedir build to `dist/OmniToMarkdown/`.
+
+For release builds, install your Authenticode certificate in `Cert:\CurrentUser\My`, then sign by thumbprint:
+
+```powershell
+$env:OMNI_CODE_SIGN_CERT_THUMBPRINT = "YOUR_CERT_THUMBPRINT"
+.\scripts\build_windows.ps1 -Sign
+```
+
+Validate the packaged app without opening the GUI:
+
+```powershell
+.\scripts\validate_windows_build.ps1
+```
+
+For stricter release gating where unsigned builds must fail validation:
+
+```powershell
+.\scripts\validate_windows_build.ps1 -RequireSignature
+```
+
+## Windows Explorer Integration
+
+The app can accept file and folder paths on launch, which enables `Open with` and Explorer context-menu workflows.
+
+You can manage this either from the new converter quick-actions panel inside the app or by running the helper scripts directly.
+
+Register the user-level right-click menu for supported document types and folders:
+
+```powershell
+.\scripts\register_windows_context_menu.ps1
+```
+
+Remove the context-menu entries:
+
+```powershell
+.\scripts\unregister_windows_context_menu.ps1
+```
+
+Check current Explorer integration state without changing anything:
+
+```powershell
+.\scripts\check_windows_context_menu.ps1
+```
+
+Notes:
+
+- The installer writes to `HKCU:\Software\Classes`, not machine-wide registry hives.
+- It also creates a user-level `Send to -> Omni to Markdown` shortcut for multi-select handoff.
+- By default it uses `dist\OmniToMarkdown\OmniToMarkdown.exe` when available.
+- If no packaged app exists yet, it falls back to `.venv\Scripts\python.exe` plus `scripts\launch_omni.py`.
+- Unsigned local builds may be blocked by Windows Smart App Control. Public distribution should use Authenticode code signing.
 
 ## Architecture
 

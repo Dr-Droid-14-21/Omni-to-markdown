@@ -12,7 +12,7 @@
 
 - `.docx`: preferred `pandoc`, fallback `mammoth`, then `libreoffice`.
 - `.odt`: preferred `pandoc`, fallback `libreoffice`.
-- `.doc` and `.odf`: handled via `libreoffice`.
+- `.doc`, `.odf`, and `.rtf`: handled via `libreoffice`.
 
 Known limitations:
 
